@@ -88,6 +88,7 @@ def normal_attention(q, k, v):
     out = softmaxed @ v
     return out
 
+
 def estimate_attention(query, key, value, n_buckets=64, n_hashes=1, n_bins=5,
                        hash_method='angular_hash'):
     device = query.device

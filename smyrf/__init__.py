@@ -1,1 +1,1 @@
-from .torch import * as torch
+from .torch import torch
