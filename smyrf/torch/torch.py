@@ -21,8 +21,8 @@ def uniform(a, b, shape, device='cuda'):
 
 
 class ApproximateAttention(nn.Module):
-    def __init__(self, n_buckets, n_hashes, n_bins,
-                 r=2.5, hash_method='alsh'):
+    def __init__(self, q_dim, k_dim, n_buckets, n_hashes, n_bins,
+                 r=2.5, hash_method='alsh', device='cuda'):
         '''
             Args:
                 - n_hashes:
@@ -47,8 +47,16 @@ class ApproximateAttention(nn.Module):
         self.n_hashes = n_hashes
         self.n_bins = n_bins
         self.hash_method = hash_method
+        self.device = device
+        self.q_dim = q_dim
+        self.k_dim = k_dim
 
+        # for L2 hash
+        self.alpha = torch.normal(0, 1, (q_dim + 3, n_hashes * n_buckets),
+                                  device=device)
         self.r = 2.5
+        self.beta = uniform(0, r, shape=(n_hashes * n_buckets), device=device)
+        self.bucket_weights = torch.normal(0, 1, (n_buckets,), device=device)
 
         # save these variables for efficient repetitive calls.
         self.bs = None
@@ -56,9 +64,8 @@ class ApproximateAttention(nn.Module):
         self.k_ticker = None
         self.q_seqlen = None
         self.k_seqlen = None
-        self.alpha = None
-        self.beta = None
         self.offsets = None
+
 
     def forward(self, query, key, value):
         device = query.device
@@ -81,30 +88,31 @@ class ApproximateAttention(nn.Module):
             if self.hash_method == 'alsh':
                 q_ext = self.alsh_queries(query)
                 k_ext = self.alsh_keys(key)
+                # q_buckets: (bs, n_hashes * q_seqlen)
                 q_buckets = self.l2_hash(q_ext)
                 k_buckets = self.l2_hash(k_ext)
             else:
                 raise ValueError('Only alsh supported.')
 
             # ------------------ sort based on their buckets -------------------- #
+            if q_seqlen != self.q_seqlen or (bs != self.bs):
+                self.q_ticker = torch.arange(n_hashes * q_seqlen, device=device).unsqueeze(0).expand(bs, n_hashes * q_seqlen)
 
-            if q_seqlen != self.q_seqlen:
-                self.q_ticker = torch.arange(n_hashes * q_seqlen, device=device).unsqueeze(0)
+            if k_seqlen != self.k_seqlen or (bs != self.bs):
+                self.k_ticker = torch.arange(n_hashes * k_seqlen, device=device).unsqueeze(0).expand(bs, n_hashes * k_seqlen)
 
-            if k_seqlen != self.k_seqlen:
-                self.k_ticker = torch.arange(n_hashes * k_seqlen, device=device).unsqueeze(0)
-
-            q_ticker = self.q_ticker.expand(bs, n_hashes * q_seqlen)
-            k_ticker = self.k_ticker.expand(bs, n_hashes * k_seqlen)
+            # retrieve
+            k_ticker = self.k_ticker
+            q_ticker = self.q_ticker
 
             q_buckets_t = q_seqlen * q_buckets + (q_ticker % q_seqlen)
             k_buckets_t = k_seqlen * k_buckets + (k_ticker % k_seqlen)
 
-            _, s_q_ticker = torch.sort(q_buckets_t, dim=1)
-            _, s_k_ticker = torch.sort(k_buckets_t, dim=1)
+            _, s_q_ticker = torch.sort(q_buckets_t, dim=-1)
+            _, s_k_ticker = torch.sort(k_buckets_t, dim=-1)
 
-            _, q_undo_sort = torch.sort(s_q_ticker, dim=1)
-            _, k_undo_sort = torch.sort(s_k_ticker, dim=1)
+            _, q_undo_sort = torch.sort(s_q_ticker, dim=-1)
+            _, k_undo_sort = torch.sort(s_k_ticker, dim=-1)
 
 
             if self.bs != bs or q_seqlen != self.q_seqlen:
@@ -167,24 +175,27 @@ class ApproximateAttention(nn.Module):
 
 
     def l2_hash(self, vecs):
+        '''
+            L2 Sensitive Hashing.
+            Args:
+                vecs: (bs, N, dim) (dtype: torch.float32)
+            Output:
+                buckets: (bs, n_hashes * N) (dtype: torch.int32)
+        '''
         device = vecs.device
         bs = vecs.shape[0]
+
+        # grab attributes
         n_hashes = self.n_hashes
         n_buckets = self.n_buckets
         r = self.r
-
-        if self.alpha is None:
-            self.alpha = torch.normal(0, 1, (vecs.shape[-1], n_hashes * n_buckets), device=device)
-
-        if self.beta is None:
-            self.beta = uniform(0, r, shape=(n_hashes * n_buckets), device=device)
-
-
         alpha = self.alpha
         beta = self.beta
+        bucket_weights = self.bucket_weights
 
         hashed_vecs = ((vecs @ alpha) + beta) // r
-        buckets = torch.matmul(hashed_vecs.reshape(bs, -1, n_hashes, n_buckets), torch.normal(0, 1, (n_buckets,), device=device)) % n_buckets
+        buckets = torch.matmul(hashed_vecs.reshape(bs, -1, n_hashes, n_buckets), bucket_weights).type(torch.int32) % n_buckets
+
         # (bs, N, n_hashes) -> (n_hashes, N, bs)
         buckets = buckets.permute(2, 1, 0)
         # (n_hashes, N, bs) -> (n_hashes, N * bs)
@@ -195,7 +206,6 @@ class ApproximateAttention(nn.Module):
             self.offsets = torch.arange(n_hashes, device=device)
             self.offsets = torch.reshape(self.offsets * n_buckets, (-1, 1))
 
-        # (n_hashes, N, bs) -> (n_hashes * N, bs)
         return (buckets + self.offsets).reshape(-1, bs).permute(1, 0)
 
 
