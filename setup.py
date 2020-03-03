@@ -1,4 +1,5 @@
 import setuptools
+from torch.utils import cpp_extension
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -21,4 +22,6 @@ setuptools.setup(
         "Intended Audience :: Science/Research",
     ],
     python_requires='>=3.6',
+    ext_modules=[cpp_extension.CppExtension('smyrfsort', ['smyrfsort.cpp'])],
+    cmdclass={'build_ext': cpp_extension.BuildExtension}
 )
