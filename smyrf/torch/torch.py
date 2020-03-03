@@ -3,6 +3,7 @@ import torch.nn as nn
 import math
 from profilehooks import timecall, profile, coverage
 
+
 def handle_device(device):
     if device == 'tpu':
         import torch_xla_py.xla_model as xm
@@ -58,13 +59,14 @@ class ApproximateAttention(nn.Module):
         self.beta = uniform(0, r, shape=(n_hashes * n_buckets), device=device)
         self.bucket_weights = torch.normal(0, 1, (n_buckets,), device=device)
 
+
         # save these variables for efficient repetitive calls.
         self.bs = None
-        self.q_ticker = None
-        self.k_ticker = None
         self.q_seqlen = None
         self.k_seqlen = None
         self.offsets = None
+        self.q_offsets = None
+        self.k_offsets = None
 
 
     def forward(self, query, key, value):
@@ -84,10 +86,20 @@ class ApproximateAttention(nn.Module):
         n_buckets = self.n_buckets
         n_bins = self.n_bins
 
+        if self.q_offsets is None:
+            # Helper variables for sorting
+            self.q_offsets = torch.arange(n_hashes, device=device) * q_seqlen
+            self.k_offsets = torch.arange(n_hashes, device=device) * k_seqlen
+
+        q_offsets = self.q_offsets
+        k_offsets = self.k_offsets
+
         with torch.no_grad():
             if self.hash_method == 'alsh':
+                # transformed queries, keys
                 q_ext = self.alsh_queries(query)
                 k_ext = self.alsh_keys(key)
+
                 # q_buckets: (bs, n_hashes * q_seqlen)
                 q_buckets = self.l2_hash(q_ext)
                 k_buckets = self.l2_hash(k_ext)
@@ -95,25 +107,14 @@ class ApproximateAttention(nn.Module):
                 raise ValueError('Only alsh supported.')
 
             # ------------------ sort based on their buckets -------------------- #
-            if q_seqlen != self.q_seqlen or (bs != self.bs):
-                self.q_ticker = torch.arange(n_hashes * q_seqlen, device=device).unsqueeze(0).expand(bs, n_hashes * q_seqlen)
-
-            if k_seqlen != self.k_seqlen or (bs != self.bs):
-                self.k_ticker = torch.arange(n_hashes * k_seqlen, device=device).unsqueeze(0).expand(bs, n_hashes * k_seqlen)
-
-            # retrieve
-            k_ticker = self.k_ticker
-            q_ticker = self.q_ticker
-
-            q_buckets_t = q_seqlen * q_buckets + (q_ticker % q_seqlen)
-            k_buckets_t = k_seqlen * k_buckets + (k_ticker % k_seqlen)
-
-            _, s_q_ticker = torch.sort(q_buckets_t, dim=-1)
-            _, s_k_ticker = torch.sort(k_buckets_t, dim=-1)
+            _, s_q_ticker = torch.sort(q_buckets.reshape(bs, n_hashes, -1), dim=-1)
+            s_q_ticker = (s_q_ticker.transpose(-2, -1) + q_offsets).transpose(-2, -1).reshape(bs, -1)
+            
+            _, s_k_ticker = torch.sort(k_buckets.reshape(bs, n_hashes, -1), dim=-1)
+            s_k_ticker = (s_k_ticker.transpose(-2, -1) + k_offsets).transpose(-2, -1).reshape(bs, -1)
 
             _, q_undo_sort = torch.sort(s_q_ticker, dim=-1)
             _, k_undo_sort = torch.sort(s_k_ticker, dim=-1)
-
 
             if self.bs != bs or q_seqlen != self.q_seqlen:
                 self.query_offset = (torch.arange(0, bs, device=device) * q_seqlen).unsqueeze(1)
