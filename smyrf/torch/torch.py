@@ -1,181 +1,206 @@
+import math
 import torch
 import torch.nn as nn
-import math
-from profilehooks import timecall, profile, coverage
-
-
-def handle_device(device):
-    if device == 'tpu':
-        import torch_xla_py.xla_model as xm
-        device = xm.xla_device()
-    return device
-
-
-def make_unit_length(x, epsilon=1e-6):
-    variance = torch.mean(x**2, dim=-1, keepdim=True)
-    norm_inputs = x / torch.sqrt(variance + epsilon)
-    return norm_inputs
-
+import torch.nn.functional as F
+from torch.autograd import Function
+from functools import partial, reduce
+from itertools import chain
+from operator import mul
 
 def uniform(a, b, shape, device='cuda'):
     return (b - a) * torch.rand(shape, device=device) + a
 
+def sort_key_val(t1, t2, dim=-1):
+    values, indices = t1.sort(dim=dim)
+    t2 = t2.expand_as(t1)
+    return values, t2.gather(dim, indices)
+
+
+def batched_index_select(values, indices):
+    last_dim = values.shape[-1]
+    return values.gather(1, indices[:, :, None].expand(-1, -1, last_dim))
+
+
+def process_inputs_chunk(fn, chunks=1, dim=0):
+    def inner_fn(*args, **kwargs):
+        keys, values, len_args = kwargs.keys(), kwargs.values(), len(args)
+        chunked_args = list(zip(*map(lambda x: x.chunk(chunks, dim=dim), list(args) + list(values))))
+        all_args = map(lambda x: (x[:len_args], dict(zip(keys, x[len_args:]))), chunked_args)
+        outputs = [fn(*c_args, **c_kwargs) for c_args, c_kwargs in all_args]
+        return tuple(map(lambda x: torch.cat(x, dim=dim), zip(*outputs)))
+    return inner_fn
+
+def chunked_sum(tensor, chunks=1):
+    *orig_size, last_dim = tensor.shape
+    tensor = tensor.reshape(-1, last_dim)
+    summed_tensors = [c.sum(dim=-1) for c in tensor.chunk(chunks, dim=0)]
+    return torch.cat(summed_tensors, dim=0).reshape(orig_size)
+
+
+def max_neg_value(tensor):
+    return -torch.finfo(tensor.dtype).max
+
 
 class ApproximateAttention(nn.Module):
-    def __init__(self, q_dim, k_dim, n_buckets, n_hashes, n_bins,
-                 r=2.5, hash_method='alsh', device='cuda'):
-        '''
-            Args:
-                - n_hashes:
+    def __init__(self,
+                 dropout=0.,
+                 q_bucket_size=64,
+                 k_bucket_size=64,
+                 n_hashes=8,
+                 add_local_attn_hash=False,
+                 causal=False,
+                 allow_duplicate_attention=True,
+                 attend_across_buckets=True,
+                 rehash_each_round=True,
+                 drop_for_hash_rate=0.0,
+                 random_rotations_per_head=False,
+                 return_attn=False):
+        super().__init__()
+        if dropout >= 1.0:
+            raise ValueError('Dropout rates must be lower than 1.')
 
-                - n_buckets: This parameter controls the number of buckets. Nodes
-                get hashed in buckets and then splitted to bins based on their
-                bucket index. Generally, having a lot of buckets leads to better
-                seperation, but is computationally intensive.
+        self.dropout = nn.Dropout(dropout)
+        self.dropout_for_hash = nn.Dropout(drop_for_hash_rate)
 
-                - n_bins: This parameter controls the number of separate attentions.
-                Nodes are separated in bins and nodes in a bin attend only within
-                the bin. If you increase this parameter, you should expect
-                acceleration but also worse results. With n_bins=1,
-                this is equivalent to dense attention.
+        assert rehash_each_round or allow_duplicate_attention, (
+            'The setting {allow_duplicate_attention=False, rehash_each_round=False}'
+            ' is not implemented.')
 
+        self.causal = causal
+        self.q_bucket_size = q_bucket_size
+        self.k_bucket_size = k_bucket_size
 
-                - hash_method:
-                    Default: alsh.
-        '''
-        super(ApproximateAttention, self).__init__()
-        self.n_buckets = n_buckets
         self.n_hashes = n_hashes
-        self.n_bins = n_bins
-        self.hash_method = hash_method
-        self.device = device
-        self.q_dim = q_dim
-        self.k_dim = k_dim
+        self.add_local_attn_hash = add_local_attn_hash
 
-        # for L2 hash
-        self.alpha = torch.normal(0, 1, (q_dim + 3, n_hashes * n_buckets),
-                                  device=device)
-        self.r = 2.5
-        self.beta = uniform(0, r, shape=(n_hashes * n_buckets), device=device)
-        self.bucket_weights = torch.normal(0, 1, (n_buckets,), device=device)
+        self._allow_duplicate_attention = allow_duplicate_attention
+        self._attend_across_buckets = attend_across_buckets
+        self._rehash_each_round = rehash_each_round
+        self._random_rotations_per_head = random_rotations_per_head
+
+        # will expend extra computation to return attention matrix
+        self._return_attn = return_attn
 
 
-        # save these variables for efficient repetitive calls.
-        self.bs = None
-        self.q_seqlen = None
-        self.k_seqlen = None
-        self.offsets = None
-        self.q_offsets = None
-        self.k_offsets = None
+    def forward(self, query, key, value, input_mask=None, input_attn_mask=None):
+        batch_size, q_seqlen, dim = query.shape
+        batch_size, k_seqlen, dim = key.shape
+        batch_size, k_seqlen, v_dim = value.shape
 
 
-    def forward(self, query, key, value):
         device = query.device
-        # lengths
-        q_seqlen = query.shape[-2]
-        k_seqlen = key.shape[-2]
-        bs = query.shape[0]
 
-        # embeddings
-        q_E = query.shape[-1]
-        k_E = key.shape[-1]
-        v_E = value.shape[-1]
+        # we need the same number of buckets for queries and keys
+        assert (q_seqlen // self.q_bucket_size) == (k_seqlen // self.k_bucket_size)
+        n_buckets = q_seqlen // self.q_bucket_size
 
-        # class attributes (for shorter code)
-        n_hashes = self.n_hashes
-        n_buckets = self.n_buckets
-        n_bins = self.n_bins
+        q_buckets = self.l2_hash(n_buckets, self.alsh_queries(query))
+        k_buckets = self.l2_hash(n_buckets, self.alsh_keys(key))
 
-        if self.q_offsets is None:
-            # Helper variables for sorting
-            self.q_offsets = torch.arange(n_hashes, device=device) * q_seqlen
-            self.k_offsets = torch.arange(n_hashes, device=device) * k_seqlen
+        if self.add_local_attn_hash:
+            local_buckets = torch.full((batch_size, seqlen), n_buckets, device=device, dtype=torch.long)
+            q_buckets = torch.cat((q_buckets, local_buckets), dim=1)
+            k_buckets = torch.cat((k_buckets, local_buckets), dim=1)
 
-        q_offsets = self.q_offsets
-        k_offsets = self.k_offsets
+        total_hashes = self.n_hashes + int(self.add_local_attn_hash)
 
-        with torch.no_grad():
-            if self.hash_method == 'alsh':
-                # transformed queries, keys
-                q_ext = self.alsh_queries(query)
-                k_ext = self.alsh_keys(key)
+        q_ticker = torch.arange(total_hashes * q_seqlen, device=device).unsqueeze(0).expand_as(q_buckets)
+        k_ticker = torch.arange(total_hashes * k_seqlen, device=device).unsqueeze(0).expand_as(k_buckets)
 
-                # q_buckets: (bs, n_hashes * q_seqlen)
-                q_buckets = self.l2_hash(q_ext)
-                k_buckets = self.l2_hash(k_ext)
-            else:
-                raise ValueError('Only alsh supported.')
+        q_buckets_and_t = q_seqlen * q_buckets + (q_ticker % q_seqlen)
+        q_buckets_and_t = q_buckets_and_t.detach()
 
-            # ------------------ sort based on their buckets -------------------- #
-            _, s_q_ticker = torch.sort(q_buckets.reshape(bs, n_hashes, -1), dim=-1)
-            s_q_ticker = (s_q_ticker.transpose(-2, -1) + q_offsets).transpose(-2, -1).reshape(bs, -1)
-            
-            _, s_k_ticker = torch.sort(k_buckets.reshape(bs, n_hashes, -1), dim=-1)
-            s_k_ticker = (s_k_ticker.transpose(-2, -1) + k_offsets).transpose(-2, -1).reshape(bs, -1)
+        k_buckets_and_t = k_seqlen * k_buckets + (k_ticker % k_seqlen)
+        k_buckets_and_t = k_buckets_and_t.detach()
 
-            _, q_undo_sort = torch.sort(s_q_ticker, dim=-1)
-            _, k_undo_sort = torch.sort(s_k_ticker, dim=-1)
 
-            if self.bs != bs or q_seqlen != self.q_seqlen:
-                self.query_offset = (torch.arange(0, bs, device=device) * q_seqlen).unsqueeze(1)
-                self.query_undo_offset = (torch.arange(0, bs, device=device) * q_seqlen * n_hashes).unsqueeze(1)
+        # Hash-based sort ("s" at the start of variable names means "sorted")
+        s_q_buckets_and_t, s_q_ticker = sort_key_val(q_buckets_and_t, q_ticker, dim=-1)
+        s_k_buckets_and_t, s_k_ticker = sort_key_val(k_buckets_and_t, k_ticker, dim=-1)
 
-            if self.bs != bs or k_seqlen != self.k_seqlen:
-                self.key_offset = (torch.arange(0, bs, device=device) * k_seqlen).unsqueeze(1)
-                self.key_undo_offset = (torch.arange(0, bs, device=device) * k_seqlen * n_hashes).unsqueeze(1)
+        _, q_undo_sort = sort_key_val(s_q_ticker, q_ticker, dim=-1)
+        _, k_undo_sort = sort_key_val(s_k_ticker, k_ticker, dim=-1)
+        del q_ticker
+        del k_ticker
 
-            # save for next call
-            self.q_seqlen = q_seqlen
-            self.k_seqlen = k_seqlen
-            self.bs = bs
+        s_q_buckets_and_t = s_q_buckets_and_t.detach()
+        s_k_buckets_and_t = s_k_buckets_and_t.detach()
 
-            # get self variables
-            query_offset = self.query_offset
-            query_undo_offset = self.query_undo_offset
-            key_offset = self.key_offset
-            key_undo_offset = self.key_undo_offset
+        s_q_ticker = s_q_ticker.detach()
+        s_k_ticker = s_k_ticker.detach()
 
-            q_t = (s_q_ticker % q_seqlen) + query_offset
-            k_t = (s_k_ticker % k_seqlen) + key_offset
+        q_undo_sort = q_undo_sort.detach()
+        k_undo_sort = k_undo_sort.detach()
 
-            q_undo_sort = q_undo_sort + query_undo_offset
-            k_undo_sort = k_undo_sort + key_undo_offset
 
-        s_q = query.reshape(-1, q_E)[q_t]
-        s_k = key.reshape(-1, k_E)[k_t]
-        s_v = value.reshape(-1, v_E)[k_t]
+        q_st = (s_q_ticker % q_seqlen)
+        k_st = (s_k_ticker % k_seqlen)
 
-        # ----------------- split to bins  -------------------------------------- #
-        b_q = torch.reshape(s_q, (bs, n_hashes * n_bins, -1, s_q.shape[-1]))
-        b_k = torch.reshape(s_k, (bs, n_hashes * n_bins, -1, s_k.shape[-1]))
-        b_v = torch.reshape(s_v, (bs, n_hashes * n_bins, -1, s_v.shape[-1]))
+        sq = batched_index_select(query, q_st)
+        sk = batched_index_select(key, k_st)
+        sv = batched_index_select(value, k_st)
 
-        # -------------- calculate inside bins attention ------------------------- #
+        # Split off a "bin" axis so that attention only occurs within chunks.
+        chunk_size = total_hashes * n_buckets
 
-        # bs, n_hashes * n_bins, per_bin_a, per_bin_b <- (bs, n_hashes * n_bins, per_bin_a, dim) * (bs, n_hashes * n_bins, dim, per_bin_b)
-        dots = torch.einsum('bkxd, bkyd -> bkxy', b_q, b_k) # eq. to: torch.matmul(b_q, torch.transpose(b_k, -1, -2))
+        # reshape tickers
+        bq_t = torch.reshape(q_st, (batch_size, chunk_size, -1))
+        bk_t = torch.reshape(k_st, (batch_size, chunk_size, -1))
 
-        # softmax
+        # reshape arrays
+        bq = torch.reshape(sq, (batch_size, chunk_size, -1, dim))
+        bk = torch.reshape(sk, (batch_size, chunk_size, -1, dim))
+        bv = torch.reshape(sv, (batch_size, chunk_size, -1, v_dim))
+
+        # TODO(giannisdaras): allow lookback attention
+
+        # Dot-product attention.
+        dots = torch.einsum('bhie,bhje->bhij', bq, bk)
+
+        # TODO(giannisdaras): allow masking
+
+        # TODO(giannidaras): allow attention between buckets
+
+        # TODO(giannisdaras): allow duplicate attention
+
+        # Softmax.
         dots_logsumexp = torch.logsumexp(dots, dim=-1, keepdim=True)
-        dots = torch.exp(dots - dots_logsumexp)
+        dots = torch.exp(dots - dots_logsumexp).type(dots.type())
+        dropped_dots = self.dropout(dots)
 
-        # ----------------- project with values ---------------------------------- #
-        # bs, n_hashes * n_bins, per_bin_a, E
-        bo = torch.matmul(dots, b_v)
+        bo = torch.einsum('buij,buje->buie', dropped_dots, bv)
+        so = torch.reshape(bo, (batch_size, -1, v_dim))
+        slogits = torch.reshape(dots_logsumexp, (batch_size, -1,))
 
-        # undo sort
-        o = bo.reshape(-1, bo.shape[-1])[q_undo_sort]
-        logits = dots_logsumexp.reshape(-1, 1)[q_undo_sort]
+        class UnsortLogits(Function):
+            @staticmethod
+            def forward(ctx, so, slogits):
+                so = so.detach()
+                slogits = slogits.detach()
+                o = batched_index_select(so, q_undo_sort)
+                _, logits = sort_key_val(s_q_ticker, slogits, dim=-1)
+                return o, logits
 
-        o = torch.reshape(o, (bs, n_hashes, q_seqlen, -1))
-        logits = torch.reshape(logits, (bs, n_hashes, q_seqlen, -1))
+            @staticmethod
+            def backward(ctx, grad_x, grad_y):
+                so_grad = batched_index_select(grad_x, s_q_ticker)
+                _, slogits_grad = sort_key_val(q_buckets_and_t, grad_y, dim=-1)
+                return so_grad, slogits_grad
+
+        o, logits = UnsortLogits.apply(so, slogits)
+        o = torch.reshape(o, (batch_size, total_hashes, q_seqlen, -1))
+        logits = torch.reshape(logits, (batch_size, total_hashes, q_seqlen, 1))
+
 
         probs = torch.exp(logits - torch.logsumexp(logits, dim=1, keepdim=True))
         out = torch.sum(o * probs, dim=1)
+
+        # TODO(giannisdaras): possibly return attention mask
+
         return out
 
 
-    def l2_hash(self, vecs):
+    def l2_hash(self, n_buckets, vecs):
         '''
             L2 Sensitive Hashing.
             Args:
@@ -184,15 +209,19 @@ class ApproximateAttention(nn.Module):
                 buckets: (bs, n_hashes * N) (dtype: torch.int32)
         '''
         device = vecs.device
-        bs = vecs.shape[0]
+        bs, seqlen, dim = vecs.shape
+
+        assert n_buckets % 2 == 0
 
         # grab attributes
         n_hashes = self.n_hashes
-        n_buckets = self.n_buckets
-        r = self.r
-        alpha = self.alpha
-        beta = self.beta
-        bucket_weights = self.bucket_weights
+        r = 2.5
+        alpha = torch.normal(0, 1, (dim, n_hashes * n_buckets),
+                             device=device)
+        self.r = 2.5
+        beta = uniform(0, r, shape=(n_hashes * n_buckets), device=device)
+        bucket_weights = torch.normal(0, 1, (n_buckets,), device=device)
+
 
         hashed_vecs = ((vecs @ alpha) + beta) // r
         buckets = torch.matmul(hashed_vecs.reshape(bs, -1, n_hashes, n_buckets), bucket_weights).type(torch.int32) % n_buckets
@@ -202,12 +231,10 @@ class ApproximateAttention(nn.Module):
         # (n_hashes, N, bs) -> (n_hashes, N * bs)
         buckets = buckets.reshape(n_hashes, -1)
 
-        # offset different hashes
-        if self.offsets is None:
-            self.offsets = torch.arange(n_hashes, device=device)
-            self.offsets = torch.reshape(self.offsets * n_buckets, (-1, 1))
+        offsets = torch.arange(n_hashes, device=device)
+        offsets = torch.reshape(offsets * n_buckets, (-1, 1))
 
-        return (buckets + self.offsets).reshape(-1, bs).permute(1, 0)
+        return (buckets + offsets).reshape(-1, bs).permute(1, 0)
 
 
     def alsh_keys(self, x):
