@@ -3,50 +3,52 @@
 #include <math.h>
 #include <tuple>
 #include <algorithm>
+#include <stack>
+#include <utility>
 
-torch::Tensor wrap(torch::Tensor & arr, int rec_stop, int left_index, int right_index, int rec_index){
-    // termination?
-    if (rec_index == rec_stop){
-        return arr;
+void print_array(torch::Tensor arr){
+  int N = size(arr, -1);
+  long * c_arr = arr.data<long>();
+  for (int i=0; i<N; i++){
+    std::cout << " " << c_arr[i] << " ";
+  }
+  std::cout << std::endl;
+}
+
+
+torch::Tensor wrap(torch::Tensor & arr, int rec_stop){
+    std::stack<std::pair<int, int>> todos;
+    int N = size(arr, -1);
+
+    todos.push(std::make_pair(0, N - 1));
+    long * c_arr = arr.data<long>();
+
+    int rec_index = 0;
+    while (!todos.empty()){
+      std::pair<int, int> top = todos.top();
+      todos.pop();
+      int left = std::get<0>(top);
+      int right = std::get<1>(top);
+
+      while (left < right){
+        int num_elements = right - left + 1;
+
+
+        // if unequal give it to the right side.
+        int n2_biggest = num_elements / 2;
+
+
+        // split into two halves
+        std::nth_element(c_arr + left, c_arr + left + n2_biggest, c_arr + right + 1);
+
+        // leave the right part for later
+        todos.push(std::make_pair(left + n2_biggest, right));
+
+        // continue with the left part
+        right = n2_biggest - 1;
+      }
+
     }
-
-    if (left_index >= right_index){
-        return arr;
-    }
-
-    torch::Tensor arr_slice = at::slice(arr, -1, left_index, right_index);
-    int num_elements = right_index - left_index;
-    int top_high = (right_index - left_index) / 2;
-    int num_r_elements = num_elements - top_high;
-
-    int maxim = 0;
-
-    // termination ?
-    if (top_high > num_r_elements){
-      maxim = top_high;
-    }
-    else{
-      maxim = num_r_elements;
-    }
-
-    if (maxim > at::size(arr_slice, -1)){
-      return arr;
-    }
-
-    int middle = left_index + top_high;
-    for (int bs=0; bs<at::size(arr_slice, 0); bs++){
-      auto c_arr = arr_slice[bs].data<long>();
-      std::nth_element(c_arr, c_arr + top_high, c_arr + at::size(arr, -1));
-    }
-
-    torch::Tensor l_slice = at::slice(arr_slice, -1, left_index, left_index + top_high);
-    torch::Tensor r_slice = at::slice(arr_slice, -1, top_high, right_index);
-
-    // repeat for smaller part
-    torch::Tensor ll = wrap(l_slice, rec_stop, left_index, middle, rec_index + 1);
-
-    // repeat for larger part
-    torch::Tensor rr = wrap(r_slice, rec_stop, middle, right_index, rec_index + 1);
     return arr;
 }
 
@@ -57,10 +59,10 @@ torch::Tensor long_sort(torch::Tensor arr, int num_buckets){
     // make a copy of the original array
     torch::Tensor s_arr = arr;
     // sort copy
-    s_arr = wrap(s_arr, rec_stop, 0, at::size(arr, -1), 0);
+    s_arr = wrap(s_arr, rec_stop);
 
     return s_arr;
-    // 
+    //
     // std::map<long, std::vector<long>> indices_map;
     // std::map<long, std::vector<long>>::iterator it = indices_map.begin();
     // std::vector<long>::iterator vec_it;
