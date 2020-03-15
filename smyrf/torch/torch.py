@@ -5,13 +5,22 @@ import torch.nn.functional as F
 from torch.autograd import Function
 from functools import partial, reduce
 from itertools import chain
-from operator import mul
+from smyrfsort import long
 
 def uniform(a, b, shape, device='cuda'):
+    '''
+        Draws shape samples from a uniform distribution U(a, b).
+
+    '''
     return (b - a) * torch.rand(shape, device=device) + a
 
 def sort_key_val(t1, t2, dim=-1):
-    values, indices = t1.sort(dim=dim)
+    # values, indices = t1.sort(dim=dim)
+    org_shape = t1.shape
+    values, indices = long(t1.reshape(org_shape[0], -1).detach().to('cpu'))
+    values = values.to(t2.device).reshape(org_shape)
+    indices = indices.to(t2.device)
+
     t2 = t2.expand_as(t1)
     return values, t2.gather(dim, indices)
 
@@ -21,24 +30,12 @@ def batched_index_select(values, indices):
     return values.gather(1, indices[:, :, None].expand(-1, -1, last_dim))
 
 
-def process_inputs_chunk(fn, chunks=1, dim=0):
-    def inner_fn(*args, **kwargs):
-        keys, values, len_args = kwargs.keys(), kwargs.values(), len(args)
-        chunked_args = list(zip(*map(lambda x: x.chunk(chunks, dim=dim), list(args) + list(values))))
-        all_args = map(lambda x: (x[:len_args], dict(zip(keys, x[len_args:]))), chunked_args)
-        outputs = [fn(*c_args, **c_kwargs) for c_args, c_kwargs in all_args]
-        return tuple(map(lambda x: torch.cat(x, dim=dim), zip(*outputs)))
-    return inner_fn
-
-def chunked_sum(tensor, chunks=1):
-    *orig_size, last_dim = tensor.shape
-    tensor = tensor.reshape(-1, last_dim)
-    summed_tensors = [c.sum(dim=-1) for c in tensor.chunk(chunks, dim=0)]
-    return torch.cat(summed_tensors, dim=0).reshape(orig_size)
-
-
 def max_neg_value(tensor):
+    '''
+        Returns -infty.
+    '''
     return -torch.finfo(tensor.dtype).max
+
 
 
 class ApproximateAttention(nn.Module):
@@ -53,8 +50,21 @@ class ApproximateAttention(nn.Module):
                  attend_across_buckets=True,
                  rehash_each_round=True,
                  drop_for_hash_rate=0.0,
-                 random_rotations_per_head=False,
                  return_attn=False):
+        '''
+            Args:
+                - dropout
+                - q_bucket_size
+                - k_bucket_size
+                - n_hashes
+                - add_local_attn_hash
+                - causal: If true, constraints attention only to the left side
+                - allow_duplicate_attention
+                - attend_across_buckets
+                - rehash_each_round
+                - drop_for_hash_rate
+                - return_attn: Whether to return attention map
+        '''
         super().__init__()
         if dropout >= 1.0:
             raise ValueError('Dropout rates must be lower than 1.')
@@ -76,7 +86,6 @@ class ApproximateAttention(nn.Module):
         self._allow_duplicate_attention = allow_duplicate_attention
         self._attend_across_buckets = attend_across_buckets
         self._rehash_each_round = rehash_each_round
-        self._random_rotations_per_head = random_rotations_per_head
 
         # will expend extra computation to return attention matrix
         self._return_attn = return_attn
@@ -87,15 +96,14 @@ class ApproximateAttention(nn.Module):
         batch_size, k_seqlen, dim = key.shape
         batch_size, k_seqlen, v_dim = value.shape
 
-
         device = query.device
 
         # we need the same number of buckets for queries and keys
         assert (q_seqlen // self.q_bucket_size) == (k_seqlen // self.k_bucket_size)
         n_buckets = q_seqlen // self.q_bucket_size
 
-        q_buckets = self.l2_hash(n_buckets, self.alsh_queries(query))
-        k_buckets = self.l2_hash(n_buckets, self.alsh_keys(key))
+        q_buckets = self.l2_hash(n_buckets, self.alsh_queries(query), r=1.25)
+        k_buckets = self.l2_hash(n_buckets, self.alsh_keys(key), r=200)
 
         if self.add_local_attn_hash:
             local_buckets = torch.full((batch_size, seqlen), n_buckets, device=device, dtype=torch.long)
@@ -197,10 +205,12 @@ class ApproximateAttention(nn.Module):
 
         # TODO(giannisdaras): possibly return attention mask
 
+        # Enable to run dense attention: out = F.softmax(query @ key.permute(0, 2, 1), dim=-1) @ value
+
         return out
 
 
-    def l2_hash(self, n_buckets, vecs):
+    def l2_hash(self, n_buckets, vecs, r=2.5):
         '''
             L2 Sensitive Hashing.
             Args:
@@ -215,16 +225,9 @@ class ApproximateAttention(nn.Module):
 
         # grab attributes
         n_hashes = self.n_hashes
-        r = 2.5
-        alpha = torch.normal(0, 1, (dim, n_hashes * n_buckets),
-                             device=device)
-        self.r = 2.5
-        beta = uniform(0, r, shape=(n_hashes * n_buckets), device=device)
-        bucket_weights = torch.normal(0, 1, (n_buckets,), device=device)
-
-
-        hashed_vecs = ((vecs @ alpha) + beta) // r
-        buckets = torch.matmul(hashed_vecs.reshape(bs, -1, n_hashes, n_buckets), bucket_weights).type(torch.int32) % n_buckets
+        alpha = torch.normal(0, 1, (dim, n_hashes), device=device)
+        beta = uniform(0, r, shape=(n_hashes,), device=device)
+        buckets = torch.floor(((vecs @ alpha) + beta) // r)
 
         # (bs, N, n_hashes) -> (n_hashes, N, bs)
         buckets = buckets.permute(2, 1, 0)
@@ -238,10 +241,13 @@ class ApproximateAttention(nn.Module):
 
 
     def alsh_keys(self, x):
+        x = x / x.max(dim=-1)[0].unsqueeze(-1)
         norm = x.norm(p=2, dim=-1).unsqueeze(-1)
         return torch.cat((x, norm**2, norm**4, norm**8), -1)
 
     def alsh_queries(self, x):
+        # normalize queries
+        x = (x - x.mean(dim=-1).unsqueeze(-1)) / x.std(dim=-1).unsqueeze(-1)
         device = x.device
         ext = torch.empty(x.shape[:-1] + (1,), device=device).fill_(0.5)
-        return torch.cat((x / x.norm(p=2, dim=-1).unsqueeze(-1), ext, ext, ext), -1)
+        return torch.cat((x, ext, ext, ext), -1)
