@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <stack>
 #include <utility>
+#include <google/dense_hash_map>
 
 void print_array(torch::Tensor arr){
   int N = size(arr, -1);
@@ -16,94 +17,103 @@ void print_array(torch::Tensor arr){
 }
 
 
-torch::Tensor wrap(torch::Tensor & arr, int rec_stop){
-    std::stack<std::pair<int, int>> todos;
-    int N = size(arr, -1);
+torch::Tensor wrap(torch::Tensor arr, int rec_stop){
+    int bs = size(arr, 0);
+    for (int i=0; i<bs; i++){
+      std::stack<std::pair<int, int>> todos;
+      int N = size(arr, -1);
 
-    todos.push(std::make_pair(0, N - 1));
-    long * c_arr = arr.data<long>();
+      todos.push(std::make_pair(0, N - 1));
+      long * c_arr = arr[i].data<long>();
 
-    int rec_index = 0;
-    while (!todos.empty()){
-      std::pair<int, int> top = todos.top();
-      todos.pop();
-      int left = std::get<0>(top);
-      int right = std::get<1>(top);
+      int rec_index = 0;
+      while (!todos.empty()){
+        std::pair<int, int> top = todos.top();
+        todos.pop();
+        int left = std::get<0>(top);
+        int right = std::get<1>(top);
 
-      while (left < right){
-        int num_elements = right - left + 1;
+        while (left < right){
+          int num_elements = right - left + 1;
 
+          // if unequal give it to the right side.
+          int n2_biggest = num_elements / 2;
 
-        // if unequal give it to the right side.
-        int n2_biggest = num_elements / 2;
+          // split into two halves
+          std::nth_element(c_arr + left, c_arr + left + n2_biggest, c_arr + right + 1);
 
+          if (rec_index < rec_stop){
+            // leave the right part for later
+            todos.push(std::make_pair(left + n2_biggest, right));
+            // continue with the left part
+            right = n2_biggest - 1;
+          }
+          else{
+            break;
+          }
 
-        // split into two halves
-        std::nth_element(c_arr + left, c_arr + left + n2_biggest, c_arr + right + 1);
+          if (left == 0) rec_index += 1;
+        }
 
-        // leave the right part for later
-        todos.push(std::make_pair(left + n2_biggest, right));
-
-        // continue with the left part
-        right = n2_biggest - 1;
       }
-
     }
     return arr;
 }
 
-// std::pair<torch::Tensor, torch::Tensor> long_sort(torch::Tensor arr, int num_buckets){
-torch::Tensor long_sort(torch::Tensor arr, int num_buckets){
+std::pair<torch::Tensor, torch::Tensor> long_sort(torch::Tensor arr, int num_buckets){
+
     int rec_stop = log2(num_buckets);
+    int batch_size = size(arr, 0);
+    int dim = size(arr, -1);
 
-    // make a copy of the original array
-    torch::Tensor s_arr = arr;
+    // {'value1': [index1, index2, ...], }
+    torch::Tensor sorted_indices = torch::empty_like(arr, torch::dtype(torch::kLong));
+
+    google::dense_hash_map<long, std::vector<long>> indices_map;
+    indices_map.set_empty_key(NULL);
+    std::vector<long>::iterator vec_it;
+
+
+    for (int bs=0; bs<batch_size; bs++){
+      long * c_arr = arr[bs].data<long>();
+      for (int i=0; i<dim; i++){
+        long elem = c_arr[i];
+        indices_map[elem].push_back(i);
+      }
+    }
+
     // sort copy
-    s_arr = wrap(s_arr, rec_stop);
+    wrap(arr, rec_stop);
 
-    return s_arr;
-    //
-    // std::map<long, std::vector<long>> indices_map;
-    // std::map<long, std::vector<long>>::iterator it = indices_map.begin();
-    // std::vector<long>::iterator vec_it;
-    //
-    // for (int bs=0; bs<at::size(s_arr, 0); bs++){
-    //   for (int i=0; i<at::size(s_arr, -1); i++){
-    //     long elem = *(s_arr[bs][i].data<long>());
-    //     it = indices_map.find(elem);
-    //     if (it != indices_map.end()){
-    //       // found -> append
-    //       (*it).second.push_back(i);
-    //     }
-    //     else{
-    //       // not found -> initialize
-    //       std::vector<long> vec;
-    //       vec.push_back(i);
-    //       indices_map.insert(std::make_pair(elem, vec));
-    //     }
-    //   }
-    // }
-    //
-    // torch::Tensor sorted_indices = torch::empty_like(arr, torch::dtype(torch::kLong));
-    //
-    // for (int bs=0; bs<at::size(arr, 0); bs++){
-    //   for (int i=0; i<at::size(arr, -1); i++){
-    //     long elem = *(arr[bs][i].data<long>());
-    //     it = indices_map.find(elem);
-    //     for (vec_it=(*it).second.begin(); vec_it!=(*it).second.end(); vec_it++){
-    //       long * data_ptr = sorted_indices[bs][i].data<long>();
-    //       (*data_ptr) = *vec_it;
-    //     }
-    //   }
-    // }
-    //
-    // // std:: cout << arr[0][0] << std:: endl;
-    // // std:: cout << s_arr[0][0] << std:: endl;
-    // // std::cout << sorted_indices[0][0] << std::endl;
-    // return std::make_pair(s_arr, sorted_indices);
+
+
+    // map each value to the indices it appears
+    for (int bs=0; bs<batch_size; bs++){
+      long * elems = arr[bs].data<long>();
+      long * s_indices = sorted_indices[bs].data<long>();
+
+      for (int i=0; i<dim; i++){
+        long elem = elems[i];
+        std::vector<long> found = indices_map[elem];
+
+        if (found.empty()){
+          // how this happens?
+          std::cout << "Warning. Something is wrong here." << std::endl;
+          found.push_back(i);
+        }
+
+        // append index in which this value appears
+        s_indices[i] = found.back();
+        // remove this index
+        found.pop_back();
+      }
+    }
+
+    return std::make_pair(arr, sorted_indices);
+
   }
 
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("long", &long_sort, "long");
+  m.def("sort", &long_sort, "sort");
 }
