@@ -430,3 +430,7 @@ class RandomBucketsAttention(nn.Module):
         # tmp = F.softmax(query @ key.permute(0, 2, 1), dim=-1) @ value
 
         return out
+
+
+def dense(query, key, value):
+    return F.softmax(query @ key.permute(0, 2, 1), dim=-1) @ value
