@@ -35,7 +35,7 @@ def max_neg_value(tensor):
 
 
 
-class ApproximateAttention(nn.Module):
+class AsymmetricLSHAttention(nn.Module):
     def __init__(self,
                  dropout=0.,
                  q_bucket_size=64,
