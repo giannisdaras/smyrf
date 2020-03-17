@@ -15,13 +15,9 @@ def uniform(a, b, shape, device='cuda'):
     '''
     return (b - a) * torch.rand(shape, device=device) + a
 
-def sort_key_val(t1, t2, dim=-1):
-    # values, indices = t1.sort(dim=dim)
-    org_shape = t1.shape
-    values, indices = long(t1.reshape(org_shape[0], -1).detach().to('cpu'))
-    values = values.to(t2.device).reshape(org_shape)
-    indices = indices.to(t2.device)
 
+def sort_key_val(t1, t2, dim=-1, n_buckets=1):
+    values, indices = t1.sort(dim=dim)
     t2 = t2.expand_as(t1)
     return values, t2.gather(dim, indices)
 
