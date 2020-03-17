@@ -224,7 +224,7 @@ class AsymmetricLSHAttention(nn.Module):
         n_hashes = self.n_hashes
         alpha = torch.normal(0, 1, (dim, n_hashes), device=device)
         beta = uniform(0, r, shape=(n_hashes,), device=device)
-        buckets = torch.floor(((vecs @ alpha) + beta) // r)
+        buckets = torch.floor(((vecs @ alpha) + beta) // r).to(torch.long)
 
         # (bs, N, n_hashes) -> (n_hashes, N, bs)
         buckets = buckets.permute(2, 1, 0)
