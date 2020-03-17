@@ -5,7 +5,8 @@ import torch.nn.functional as F
 from torch.autograd import Function
 from functools import partial, reduce
 from itertools import chain
-from smyrfsort import long
+from smyrfsort import sort
+from pytorch_memlab import profile
 
 def uniform(a, b, shape, device='cuda'):
     '''
