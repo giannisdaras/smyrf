@@ -248,3 +248,185 @@ class AsymmetricLSHAttention(nn.Module):
         device = x.device
         ext = torch.empty(x.shape[:-1] + (1,), device=device).fill_(0.5)
         return torch.cat((x, ext, ext, ext), -1)
+
+
+
+class RandomBucketsAttention(nn.Module):
+    # @profile
+    def __init__(self,
+                 q_seqlen,
+                 k_seqlen,
+                 dropout=0.,
+                 q_bucket_size=64,
+                 k_bucket_size=64,
+                 n_hashes=8,
+                 add_local_attn_hash=False,
+                 causal=False,
+                 allow_duplicate_attention=True,
+                 attend_across_buckets=True,
+                 rehash_each_round=True,
+                 drop_for_hash_rate=0.0,
+                 return_attn=False,
+                 max_perms=20,
+                 device='cuda'):
+        '''
+            Args:
+                - q_seqlen: query seq length
+                - k_seqlen
+                - dropout
+                - q_bucket_size
+                - k_bucket_size
+                - n_hashes
+                - add_local_attn_hash
+                - causal: If true, constraints attention only to the left side
+                - allow_duplicate_attention
+                - attend_across_buckets
+                - rehash_each_round
+                - drop_for_hash_rate
+                - return_attn: Whether to return attention map
+                - max_perms: maximum batch size (needed for speed)
+                - device
+        '''
+        super().__init__()
+        if dropout >= 1.0:
+            raise ValueError('Dropout rates must be lower than 1.')
+
+        self.dropout = nn.Dropout(dropout)
+        self.dropout_for_hash = nn.Dropout(drop_for_hash_rate)
+
+        assert rehash_each_round or allow_duplicate_attention, (
+            'The setting {allow_duplicate_attention=False, rehash_each_round=False}'
+            ' is not implemented.')
+
+        self.causal = causal
+        self.q_bucket_size = q_bucket_size
+        self.k_bucket_size = k_bucket_size
+
+        self.n_hashes = n_hashes
+        self.add_local_attn_hash = add_local_attn_hash
+
+        self._allow_duplicate_attention = allow_duplicate_attention
+        self._attend_across_buckets = attend_across_buckets
+        self._rehash_each_round = rehash_each_round
+
+        # will expend extra computation to return attention matrix
+        self._return_attn = return_attn
+
+        # maximum number of pre-computed permutations
+        self.max_perms = max_perms
+
+        # needed for pre-computing permutations
+        self.q_seqlen = q_seqlen
+        self.k_seqlen = k_seqlen
+
+
+        # pre-computed for speed
+        q_random_perms = torch.empty(max_perms, n_hashes, q_seqlen, dtype=torch.long, device=device)
+        k_random_perms = torch.empty(max_perms, n_hashes, k_seqlen, dtype=torch.long, device=device)
+
+        for i in range(max_perms):
+            for j in range(n_hashes):
+                q_random_perms[i][j] = torch.randperm(q_seqlen, device=device)
+                k_random_perms[i][j] = torch.randperm(k_seqlen, device=device)
+
+
+        hashes_offset = torch.empty(n_hashes, device=device, dtype=torch.long).fill_(q_seqlen) * torch.arange(self.n_hashes, device=device)
+
+        self.s_q_ticker = q_random_perms.permute(0, 2, 1) + hashes_offset
+        self.s_k_ticker = k_random_perms.permute(0, 2, 1) + hashes_offset
+
+        del q_random_perms
+        del k_random_perms
+        del hashes_offset
+
+        self.s_q_ticker = self.s_q_ticker.permute(0, 2, 1).reshape(max_perms, -1)
+        self.s_k_ticker = self.s_k_ticker.permute(0, 2, 1).reshape(max_perms, -1)
+
+        q_ticker = torch.arange(self.n_hashes * q_seqlen, device=device).unsqueeze(0).expand_as(self.s_q_ticker)
+        k_ticker = torch.arange(self.n_hashes * k_seqlen, device=device).unsqueeze(0).expand_as(self.s_k_ticker)
+
+        _, self.q_undo_sort = sort_key_val(self.s_q_ticker, q_ticker, dim=-1)
+        _, self.k_undo_sort = sort_key_val(self.s_k_ticker, k_ticker, dim=-1)
+
+        del q_ticker
+        del k_ticker
+
+
+    def forward(self, query, key, value, input_mask=None, input_attn_mask=None):
+        batch_size, q_seqlen, dim = query.shape
+        batch_size, k_seqlen, dim = key.shape
+        batch_size, k_seqlen, v_dim = value.shape
+
+
+        # pre-compute more random perms than batch size
+        assert batch_size <= self.max_perms
+
+        device = query.device
+
+        # we need the same number of buckets for queries and keys
+        assert (q_seqlen // self.q_bucket_size) == (k_seqlen // self.k_bucket_size)
+        n_buckets = q_seqlen // self.q_bucket_size
+
+        s_q_ticker = self.s_q_ticker[:batch_size].to(device)
+        s_k_ticker = self.s_k_ticker[:batch_size].to(device)
+
+        q_undo_sort = self.q_undo_sort[:batch_size].to(device)
+        k_undo_sort = self.k_undo_sort[:batch_size].to(device)
+
+        # fix range
+        q_st = s_q_ticker % q_seqlen
+        k_st = s_k_ticker % k_seqlen
+
+        sq = batched_index_select(query, q_st)
+        sk = batched_index_select(key, k_st)
+        sv = batched_index_select(value, k_st)
+
+
+        # Split off a "bin" axis so that attention only occurs within chunks.
+        chunk_size = self.n_hashes * n_buckets
+
+        # reshape tickers
+        bq_t = torch.reshape(q_st, (batch_size, chunk_size, -1))
+        bk_t = torch.reshape(k_st, (batch_size, chunk_size, -1))
+
+        # reshape arrays
+        bq = torch.reshape(sq, (batch_size, chunk_size, -1, dim))
+        bk = torch.reshape(sk, (batch_size, chunk_size, -1, dim))
+        bv = torch.reshape(sv, (batch_size, chunk_size, -1, v_dim))
+
+        # TODO(giannisdaras): allow lookback attention
+
+        # Dot-product attention.
+        inner = torch.einsum('bhie,bhje->bhij', bq, bk)
+
+        # TODO(giannisdaras): allow masking
+
+        # TODO(giannidaras): allow attention between buckets
+
+        # TODO(giannisdaras): allow duplicate attention
+
+        # Softmax.
+        dots_logsumexp = torch.logsumexp(inner, dim=-1, keepdim=True)
+        dots = torch.exp(inner - dots_logsumexp).type(inner.type())
+        dropped_dots = self.dropout(dots)
+
+        bo = torch.einsum('buij,buje->buie', dropped_dots, bv)
+        so = torch.reshape(bo, (batch_size, -1, v_dim))
+        slogits = torch.reshape(dots_logsumexp, (batch_size, -1,))
+
+        # re-arrange
+        o = batched_index_select(so, q_undo_sort)
+        logits = slogits.gather(-1, q_undo_sort)
+
+
+        o = torch.reshape(o, (batch_size, self.n_hashes, q_seqlen, -1))
+        # ln(total mass of softmax for each query)
+        logits = torch.reshape(logits, (batch_size, self.n_hashes, q_seqlen, 1))
+
+
+        probs = torch.exp(logits - torch.logsumexp(logits, dim=1, keepdim=True))
+        out = torch.sum(o * probs, dim=1)
+
+        # tmp = F.softmax(query @ key.permute(0, 2, 1), dim=-1) @ value
+
+        return out
