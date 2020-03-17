@@ -1,1 +1,1 @@
-from .torch import torch
+from .torch import attn
