@@ -32,14 +32,13 @@ class Profiler(unittest.TestCase):
                                            n_hashes=n_hashes)
         @timecall
         def time_profile(layer, *inputs):
-            layer(*inputs)
+            return layer(*inputs)
 
         for i in range(benchmark_trials):
             inputs = [queries[i], keys[i], values[i]]
-            time_profile(random_attn, *inputs)
-            # time_profile(dense, *inputs)
-            time_profile(alsh_attn, *inputs)
-
+            q_rand = time_profile(random_attn, *inputs)
+            q_dense = time_profile(dense, *inputs)
+            q_alsh = time_profile(alsh_attn, *inputs)
 
 
 if __name__ == '__main__':

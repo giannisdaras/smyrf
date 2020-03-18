@@ -88,12 +88,17 @@ class RandomBucketsAttention():
 
         # pre-computed for speed
 
-        q_indices = tf.broadcast_to(tf.range(0, q_seqlen), (max_perms, n_hashes, q_seqlen))
-        k_indices = tf.broadcast_to(tf.range(0, k_seqlen), (max_perms, n_hashes, k_seqlen))
+        q_indices = tf.repeat(tf.expand_dims(tf.range(0, q_seqlen), 0), max_perms * n_hashes, axis=0)
+        k_indices = tf.repeat(tf.expand_dims(tf.range(0, k_seqlen), 0), max_perms * n_hashes, axis=0)
 
-        q_random_perms = tf.transpose(tf.random.shuffle(tf.transpose(q_indices, perm=(2, 0, 1))), perm=(1, 2, 0))
-        k_random_perms = tf.transpose(tf.random.shuffle(tf.transpose(k_indices, perm=(2, 0, 1))), perm=(1, 2, 0))
+        q_permutations = []
+        k_permutations = []
+        for i in range(max_perms * n_hashes):
+            q_permutations.append(tf.random.shuffle(q_indices[i]))
+            k_permutations.append(tf.random.shuffle(k_indices[i]))
 
+        q_random_perms = tf.reshape(tf.stack(q_permutations), (max_perms, n_hashes, q_seqlen))
+        k_random_perms = tf.reshape(tf.stack(k_permutations), (max_perms, n_hashes, k_seqlen))
 
         hashes_offset = tf.fill((n_hashes,), q_seqlen) * tf.range(0, n_hashes)
 
@@ -190,6 +195,8 @@ class RandomBucketsAttention():
 
         probs = tf.math.exp(logits - tf.math.reduce_logsumexp(logits, axis=1, keepdims=True))
         out = tf.math.reduce_sum(o * probs, axis=1)
-
-
         return out
+
+
+def dense(query, key, value):
+    return tf.nn.softmax(query @ tf.transpose(key, perm=(0, 2, 1)), axis=-1) @ value
