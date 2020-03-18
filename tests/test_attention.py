@@ -7,15 +7,15 @@ import torch
 class Profiler(unittest.TestCase):
     def test_cuda_seq_benchmark(self):
         benchmark_trials = 10
-        q_seqlen = 32768
-        k_seqlen = 32768
+        q_seqlen = 1024
+        k_seqlen = 1024
         dim = 100
         v_dim = 100
 
         bs = 1
         q_bucket_size = 32
         k_bucket_size = 32
-        n_hashes = 16
+        n_hashes = 32
 
         queries = torch.normal(0, 1, (benchmark_trials, 1, q_seqlen, dim), device='cuda')
         keys = torch.normal(0, 1, (benchmark_trials, 1, k_seqlen, dim), device='cuda')
