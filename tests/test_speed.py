@@ -37,7 +37,10 @@ class Profiler(unittest.TestCase):
 
         # Warmup
         inputs = [queries[0], keys[0], values[0]]
+        random_attn(*inputs)
         dense(*inputs)
+        alsh_attn(*inputs)
+
 
         # Benchmark runs
         for i in range(benchmark_trials):
