@@ -1,5 +1,4 @@
 import setuptools
-from torch.utils import cpp_extension
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -10,7 +9,7 @@ setuptools.setup(
     author="giannisdaras",
     author_email="daras.giannhs@gmail.com",
     description="Asymmetric LSH attention.",
-    long_description="Accelerate your pre-trained attention models with asymmetric LSH attention.",
+    long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/giannisdaras/smyrf",
     packages=setuptools.find_packages(),
@@ -22,6 +21,4 @@ setuptools.setup(
         "Intended Audience :: Science/Research",
     ],
     python_requires='>=3.6',
-    ext_modules=[cpp_extension.CppExtension('smyrfsort', ['smyrfsort.cpp'])],
-    cmdclass={'build_ext': cpp_extension.BuildExtension}
 )
