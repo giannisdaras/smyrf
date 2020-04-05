@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from torch.autograd import Function
 from functools import partial, reduce
 from itertools import chain
-from smyrfsort import sort
 from pytorch_memlab import profile
 
 
