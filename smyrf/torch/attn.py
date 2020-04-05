@@ -8,6 +8,50 @@ from itertools import chain
 from pytorch_memlab import profile
 
 
+def alsh_keys(x):
+    x = x / x.max(dim=-1)[0].unsqueeze(-1)
+    norm = x.norm(p=2, dim=-1).unsqueeze(-1)
+    return torch.cat((x, norm**2, norm**4, norm**8), -1)
+
+def alsh_queries(x):
+    # normalize queries
+    x = (x - x.mean(dim=-1).unsqueeze(-1)) / x.std(dim=-1).unsqueeze(-1)
+    device = x.device
+    ext = torch.empty(x.shape[:-1] + (1,), device=device).fill_(0.5)
+    return torch.cat((x, ext, ext, ext), -1)
+
+
+def l2_hash(n_hashes, n_buckets, vecs, r=2.5, with_offsets=True):
+    '''
+        L2 Sensitive Hashing.
+        Args:
+            vecs: (bs, N, dim) (dtype: torch.float32)
+        Output:
+            buckets: (bs, n_hashes * N) (dtype: torch.int32)
+    '''
+    device = vecs.device
+    bs, seqlen, dim = vecs.shape
+
+    assert n_buckets % 2 == 0
+
+    alpha = torch.normal(0, 1, (dim, n_hashes), device=device)
+    beta = uniform(0, r, shape=(n_hashes,), device=device)
+    buckets = torch.floor(((vecs @ alpha) + beta) // r).to(torch.long)
+
+    # (bs, N, n_hashes) -> (n_hashes, N, bs)
+    buckets = buckets.permute(2, 1, 0)
+    # (n_hashes, N, bs) -> (n_hashes, N * bs)
+    buckets = buckets.reshape(n_hashes, -1)
+
+    if with_offsets:
+        offsets = torch.arange(n_hashes, device=device)
+        offsets = torch.reshape(offsets * n_buckets, (-1, 1))
+        buckets = buckets + offsets
+
+    return buckets.reshape(-1, bs).permute(1, 0)
+
+
+
 def uniform(a, b, shape, device='cuda'):
     '''
         Draws shape samples from a uniform distribution U(a, b).
@@ -99,8 +143,8 @@ class AsymmetricLSHAttention(nn.Module):
         assert (q_seqlen // self.q_bucket_size) == (k_seqlen // self.k_bucket_size)
         n_buckets = q_seqlen // self.q_bucket_size
 
-        q_buckets = self.l2_hash(n_buckets, self.alsh_queries(query), r=1.25)
-        k_buckets = self.l2_hash(n_buckets, self.alsh_keys(key), r=200)
+        q_buckets = l2_hash(self.n_hashes, n_buckets, alsh_queries(query), r=1.25)
+        k_buckets = l2_hash(self.n_hashes, n_buckets, alsh_keys(key), r=200)
 
         if self.add_local_attn_hash:
             local_buckets = torch.full((batch_size, seqlen), n_buckets, device=device, dtype=torch.long)
@@ -205,49 +249,6 @@ class AsymmetricLSHAttention(nn.Module):
         # Enable to run dense attention: out = F.softmax(query @ key.permute(0, 2, 1), dim=-1) @ value
 
         return out
-
-
-    def l2_hash(self, n_buckets, vecs, r=2.5):
-        '''
-            L2 Sensitive Hashing.
-            Args:
-                vecs: (bs, N, dim) (dtype: torch.float32)
-            Output:
-                buckets: (bs, n_hashes * N) (dtype: torch.int32)
-        '''
-        device = vecs.device
-        bs, seqlen, dim = vecs.shape
-
-        assert n_buckets % 2 == 0
-
-        # grab attributes
-        n_hashes = self.n_hashes
-        alpha = torch.normal(0, 1, (dim, n_hashes), device=device)
-        beta = uniform(0, r, shape=(n_hashes,), device=device)
-        buckets = torch.floor(((vecs @ alpha) + beta) // r).to(torch.long)
-
-        # (bs, N, n_hashes) -> (n_hashes, N, bs)
-        buckets = buckets.permute(2, 1, 0)
-        # (n_hashes, N, bs) -> (n_hashes, N * bs)
-        buckets = buckets.reshape(n_hashes, -1)
-
-        offsets = torch.arange(n_hashes, device=device)
-        offsets = torch.reshape(offsets * n_buckets, (-1, 1))
-
-        return (buckets + offsets).reshape(-1, bs).permute(1, 0)
-
-
-    def alsh_keys(self, x):
-        x = x / x.max(dim=-1)[0].unsqueeze(-1)
-        norm = x.norm(p=2, dim=-1).unsqueeze(-1)
-        return torch.cat((x, norm**2, norm**4, norm**8), -1)
-
-    def alsh_queries(self, x):
-        # normalize queries
-        x = (x - x.mean(dim=-1).unsqueeze(-1)) / x.std(dim=-1).unsqueeze(-1)
-        device = x.device
-        ext = torch.empty(x.shape[:-1] + (1,), device=device).fill_(0.5)
-        return torch.cat((x, ext, ext, ext), -1)
 
 
 
