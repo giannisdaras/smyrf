@@ -266,6 +266,10 @@ class LSH:
     def __call__(self, *args, **kwargs):
         raise NotImplementedError('LSH scheme not implemented')
 
+    def compute_hash_agreement(self, q_hash, k_hash):
+        return (q_hash == k_hash).min(dim=-1)[0].sum(dim=-1)
+
+
 
 class VoronoiLSH(LSH):
     def __init__(self, L, K, dim, device='cuda'):
@@ -305,10 +309,12 @@ class CrossPolytopeLSH(LSH):
         return indices
 
 class E2LSH(LSH):
-    def __init__(self, n_hashes, dim, r=2.5, device='cuda'):
-        self.alpha = torch.normal(0, 1, (dim, n_hashes), device=device)
-        self.beta = uniform(0, r, shape=(n_hashes,), device=device)
-        self.n_hashes = n_hashes
+    def __init__(self, L, K, dim, r=9, device='cuda'):
+        super(E2LSH, self).__init__()
+        self.alpha = torch.normal(0, 1, (dim, L * K), device=device)
+        self.beta = uniform(0, r, shape=(L * K,), device=device)
+        self.L = L
+        self.K = K
         self.dim = dim
         self.r = r
 
@@ -326,25 +332,27 @@ class E2LSH(LSH):
         projection = vecs @ self.alpha
         projection_shift = projection + self.beta
         projection_shift_rescale = projection_shift / self.r
-        return projection_shift_rescale.to(torch.long)
+        return projection_shift_rescale.to(torch.long).reshape(-1, self.L, self.K)
 
 
 class QLSH(LSH):
-    def __init__(self, n_hashes, dim, r=1, device='cuda'):
-        self.alpha = torch.normal(0, 1, (dim, n_hashes), device=device)
+    def __init__(self, L, K, dim, r=4, device='cuda'):
+        self.alpha = torch.normal(0, 1, (dim, L * K), device=device)
         self.dim = dim
-        self.n_hashes = n_hashes
+        self.L = L
+        self.K = K
         self.r = r
 
     @two_dimensional
     def __call__(self, queries, keys):
-        q_projection = queries @ self.alpha
-        k_projection = (keys @ self.alpha)
+        q_projection = (queries @ self.alpha).reshape(-1, self.L, self.K)
+        k_projection = (keys @ self.alpha).reshape(-1, self.L, self.K)
+
         return self.compute_hash_agreement(q_projection, k_projection)
 
     def compute_hash_agreement(self, q_projection, k_projection):
         diff = k_projection - q_projection
         left_part = diff >= (- self.r / 2)
         right_part = diff <= (self.r / 2)
-        truth_table = left_part * right_part
-        return truth_table.sum(dim=-1)
+        truth_table = (left_part * right_part).min(dim=-1)[0].sum(dim=-1)
+        return truth_table
