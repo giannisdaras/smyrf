@@ -1,8 +1,110 @@
 ''' Utility functions for smyrf '''
 import torch
 import torch.nn.functional as F
-from collections import defaultdict
+from collections import defaultdict, Counter
 import numpy as np
+from tqdm import tqdm
+
+def pop_many(old_list, indexes):
+    ''' Remove a set of indexes (consistently) from a list '''
+    # Create an empty new list
+    new_list = []
+    # Counter on the indices list
+    j = 0
+
+    for i, x in enumerate(old_list):
+        if j == len(indexes) or i != indexes[j]:
+            new_list.append(x)
+        elif i == indexes[j]:
+            j += 1
+    return new_list
+
+class QItem:
+    def __init__(self, index, q_hash):
+        self.index = index
+        self.q_hash = q_hash
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)), self.index == other.index
+
+    def __hash__(self):
+        return self.q_hash + self.index
+
+    def __str__(self):
+        return 'Q' + str(self.index)
+
+    def __repr__(self):
+        return 'Q' + str(self.index)
+
+
+class KItem:
+    def __init__(self, index, k_hash):
+        self.index = index
+        self.k_hash = k_hash
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)), self.index == other.index
+
+    def __hash__(self):
+        return self.k_hash + self.index
+
+    def __str__(self):
+        return 'K' + str(self.index)
+
+    def __repr__(self):
+        return 'K' + str(self.index)
+
+
+def collect_buckets(q_hashes, k_hashes):
+    '''
+        q_hashes, k_hashes: (N, L) (unique)
+    '''
+    N = q_hashes.shape[0]
+
+    q_buckets = defaultdict(lambda: set())
+    k_buckets = defaultdict(lambda: set())
+
+    for i in tqdm(range(N)):
+        q_h_list = [x.item() for x in q_hashes[i]]
+        k_h_list = [x.item() for x in k_hashes[i]]
+
+        q_set = Counter(q_h_list)
+        k_set = Counter(k_h_list)
+
+        for q_val in q_set.keys():
+            q_item = QItem(i, N)
+            q_buckets[q_val].add(q_item)
+
+
+        for k_val in k_set.keys():
+            k_item = KItem(i, N)
+            k_buckets[k_val].add(k_item)
+
+    to_pop = []
+
+    for key in q_buckets:
+        # only keys
+        if not key in k_buckets:
+            to_pop.append(key)
+
+    for key in k_buckets:
+        if not key in q_buckets:
+            to_pop.append(key)
+
+    for key in to_pop:
+        try:
+            del q_buckets[key]
+        except:
+            pass
+
+        try:
+            del k_buckets[key]
+        except:
+            pass
+
+    return q_buckets, k_buckets
+
+
 
 def random_flip(x):
     flips = torch.ceil((torch.rand(x.shape, device=x.device) - 0.5)).to(torch.uint8)
