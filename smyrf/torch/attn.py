@@ -6,7 +6,84 @@ from torch.autograd import Function
 from functools import partial, reduce
 from itertools import chain
 from pytorch_memlab import profile
-from .utils import *
+from utils import *
+from balanced_kmeans import kmeans_equal
+
+class SmyrfAttention(nn.Module):
+    def __init__(self, n_hashes, q_cluster_size, k_cluster_size,
+                 dropout=0., max_iters=50):
+        super(SmyrfAttention, self).__init__()
+        self.n_hashes = n_hashes
+        self.q_cluster_size = q_cluster_size
+        self.k_cluster_size = k_cluster_size
+        self.dropout = nn.Dropout(dropout)
+        self.xbox = XBOX()
+        self.max_iters = max_iters
+
+
+    def forward(self, query, key, value, attn_mask=None):
+        bs, q_seqlen, dim = query.shape
+        bs, k_seqlen, dim = key.shape
+        v_dim = values.shape[-1]
+        assert query.device == key.device, 'Queries, keys in different devices'
+        device = query.device
+
+        q_positions = torch.empty(self.n_hashes, bs, q_seqlen, dtype=torch.long,
+                                  device=device)
+        k_positions = torch.empty(self.n_hashes, bs, k_seqlen, dtype=torch.long,
+                                  device=device)
+
+        # XBOX transform
+        Queries = self.xbox.Q(queries)
+        Keys = self.xbox.K(keys)
+
+        for i in range(self.n_hashes):
+            # get buckets
+            q_indices, k_indices = get_kmeans_buckets(Queries, Keys,
+                                                      self.q_cluster_size,
+                                                      self.k_cluster_size,
+                                                      max_iters=self.max_iters)
+            q_positions[i] = q_indices
+            k_positions[i] = k_indices
+
+        q_rev_positions = torch.argsort(q_positions, dim=-1)
+
+        # sorted queries, keys, values
+        s_queries = queries.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1)\
+                           .gather(2, q_positions.unsqueeze(-1)\
+                           .repeat(1, 1, 1, dim))\
+                           .reshape(-1, self.q_cluster_size, dim)
+
+        s_keys = keys.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1)\
+                     .gather(2, k_positions.unsqueeze(-1)\
+                     .repeat(1, 1, 1, dim))\
+                     .reshape(-1, self.k_cluster_size, dim)
+
+        s_values = values.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1)\
+                         .gather(2, k_positions.unsqueeze(-1)\
+                         .repeat(1, 1, 1, v_dim))\
+                         .reshape(-1, self.k_cluster_size, v_dim)
+
+        inner = s_queries @ s_keys.transpose(2, 1)
+        # softmax denominator
+        dots_logsumexp = torch.logsumexp(inner, dim=-1, keepdim=True)
+        # softmax
+        dots = torch.exp(inner - dots_logsumexp).type(inner.type())
+        # dropout
+        dots = self.dropout(dots)
+
+        # n_hashes outs
+        bo = (dots @ s_values).reshape(self.n_hashes, bs, N, -1)
+
+        # undo sort
+        o = bo.gather(2, q_rev_positions.unsqueeze(-1).repeat(1, 1, 1, dim))
+
+        slogits = dots_logsumexp.reshape(n_hashes, bs, -1)
+        logits = torch.gather(slogits, 2, q_rev_positions)
+
+        probs = torch.exp(logits - torch.logsumexp(logits, dim=0, keepdim=True))
+        out = torch.sum(o * probs.unsqueeze(-1), dim=0)
+        return out
 
 
 class AsymmetricLSHAttention(nn.Module):
@@ -333,3 +410,19 @@ class RandomBucketsAttention(nn.Module):
 
 def dense(query, key, value):
     return F.softmax(query @ key.permute(0, 2, 1), dim=-1) @ value
+
+
+if __name__ == '__main__':
+    N = 1024
+    dim = 30
+    bs = 2
+    n_hashes = 8
+    q_cluster_size = k_cluster_size = 16
+    device = 'cuda'
+
+    queries = torch.randn(bs, N, dim, device=device)
+    keys = torch.randn(bs, N, dim, device=device)
+    values = torch.randn(bs, N, dim, device=device)
+
+    approximator = SmyrfAttention(n_hashes, q_cluster_size, k_cluster_size)
+    approximator(queries, keys, values)
