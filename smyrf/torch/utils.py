@@ -4,6 +4,22 @@ import torch.nn.functional as F
 from collections import defaultdict, Counter
 import numpy as np
 from tqdm import tqdm
+import random
+
+
+def get_achlioptas(dim, device='cuda'):
+    arr = torch.empty(dim, dim, device=device)
+    for i in range(dim):
+        for j in range(dim):
+            p = random.random()
+            if p <= 1/6:
+                arr[i][j] = -1
+            elif p <= 2/3:
+                arr[i][j] = 0
+            else:
+                arr[i][j] = 1
+    return arr
+
 
 def pop_many(old_list, indexes):
     ''' Remove a set of indexes (consistently) from a list '''
@@ -293,6 +309,7 @@ class VoronoiLSH(LSH):
     def __call__(self, vecs):
         products = vecs @ self.gaussians
         return torch.argmax(products.reshape(-1, self.L, self.K), dim=-1)
+
 
 class CrossPolytopeLSH(LSH):
     def __init__(self, L, K, dim, device='cuda'):

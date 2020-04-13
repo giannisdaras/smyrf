@@ -6,77 +6,7 @@ from torch.autograd import Function
 from functools import partial, reduce
 from itertools import chain
 from pytorch_memlab import profile
-
-
-def alsh_keys(x):
-    x = x / x.max(dim=-1)[0].unsqueeze(-1)
-    norm = x.norm(p=2, dim=-1).unsqueeze(-1)
-    return torch.cat((x, norm**2, norm**4, norm**8), -1)
-
-def alsh_queries(x):
-    # normalize queries
-    x = (x - x.mean(dim=-1).unsqueeze(-1)) / x.std(dim=-1).unsqueeze(-1)
-    device = x.device
-    ext = torch.empty(x.shape[:-1] + (1,), device=device).fill_(0.5)
-    return torch.cat((x, ext, ext, ext), -1)
-
-
-def l2_hash(n_hashes, n_buckets, vecs, r=2.5, with_offsets=True):
-    '''
-        L2 Sensitive Hashing.
-        Args:
-            vecs: (bs, N, dim) (dtype: torch.float32)
-        Output:
-            buckets: (bs, n_hashes * N) (dtype: torch.int32)
-    '''
-    device = vecs.device
-    bs, seqlen, dim = vecs.shape
-
-    assert n_buckets % 2 == 0
-
-    alpha = torch.normal(0, 1, (dim, n_hashes), device=device)
-    beta = uniform(0, r, shape=(n_hashes,), device=device)
-    buckets = torch.floor(((vecs @ alpha) + beta) // r).to(torch.long)
-
-    # (bs, N, n_hashes) -> (n_hashes, N, bs)
-    buckets = buckets.permute(2, 1, 0)
-    # (n_hashes, N, bs) -> (n_hashes, N * bs)
-    buckets = buckets.reshape(n_hashes, -1)
-
-    if with_offsets:
-        offsets = torch.arange(n_hashes, device=device)
-        offsets = torch.reshape(offsets * n_buckets, (-1, 1))
-        buckets = buckets + offsets
-
-    return buckets.reshape(-1, bs).permute(1, 0)
-
-
-
-def uniform(a, b, shape, device='cuda'):
-    '''
-        Draws shape samples from a uniform distribution U(a, b).
-
-    '''
-    return (b - a) * torch.rand(shape, device=device) + a
-
-
-def sort_key_val(t1, t2, dim=-1, n_buckets=1):
-    values, indices = t1.sort(dim=dim)
-    t2 = t2.expand_as(t1)
-    return values, t2.gather(dim, indices)
-
-
-def batched_index_select(values, indices):
-    last_dim = values.shape[-1]
-    return values.gather(1, indices[:, :, None].expand(-1, -1, last_dim))
-
-
-def max_neg_value(tensor):
-    '''
-        Returns -infty.
-    '''
-    return -torch.finfo(tensor.dtype).max
-
+from .utils import *
 
 
 class AsymmetricLSHAttention(nn.Module):
