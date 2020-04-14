@@ -316,12 +316,12 @@ class L2LSH(AsymmetricTransform):
 class XBOX(AsymmetricTransform):
     def K(self, x):
         norms = x.norm(p=2, dim=-1).unsqueeze(-1)
-        max_norm = torch.max(norms, dim=0)[0]
+        max_norm = torch.max(norms, dim=1).values.unsqueeze(-1)
         ext = torch.sqrt(max_norm**2 - norms**2)
         return torch.cat((x, ext), -1)
 
     def Q(self, x):
-        zero = torch.tensor([0.0], device=x.device).repeat(x.shape[0], 1)
+        zero = torch.tensor([0.0], device=x.device).repeat(x.shape[:-1], 1).unsqueeze(-1)
         return torch.cat((x, zero), -1)
 
 
