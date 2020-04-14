@@ -6,7 +6,7 @@ from torch.autograd import Function
 from functools import partial, reduce
 from itertools import chain
 from pytorch_memlab import profile
-from utils import *
+from smyrf.torch.utils import *
 from balanced_kmeans import kmeans_equal
 
 class SmyrfAttention(nn.Module):
@@ -21,12 +21,12 @@ class SmyrfAttention(nn.Module):
         self.max_iters = max_iters
 
 
-    def forward(self, query, key, value, attn_mask=None):
-        bs, q_seqlen, dim = query.shape
-        bs, k_seqlen, dim = key.shape
+    def forward(self, queries, keys, values, attn_mask=None):
+        bs, q_seqlen, dim = queries.shape
+        bs, k_seqlen, dim = keys.shape
         v_dim = values.shape[-1]
-        assert query.device == key.device, 'Queries, keys in different devices'
-        device = query.device
+        assert queries.device == keys.device, 'Queries, keys in different devices'
+        device = queries.device
 
         q_positions = torch.empty(self.n_hashes, bs, q_seqlen, dtype=torch.long,
                                   device=device)
@@ -73,12 +73,12 @@ class SmyrfAttention(nn.Module):
         dots = self.dropout(dots)
 
         # n_hashes outs
-        bo = (dots @ s_values).reshape(self.n_hashes, bs, N, -1)
+        bo = (dots @ s_values).reshape(self.n_hashes, bs, q_seqlen, -1)
 
         # undo sort
         o = bo.gather(2, q_rev_positions.unsqueeze(-1).repeat(1, 1, 1, dim))
 
-        slogits = dots_logsumexp.reshape(n_hashes, bs, -1)
+        slogits = dots_logsumexp.reshape(self.n_hashes, bs, -1)
         logits = torch.gather(slogits, 2, q_rev_positions)
 
         probs = torch.exp(logits - torch.logsumexp(logits, dim=0, keepdim=True))
@@ -150,8 +150,19 @@ class AsymmetricLSHAttention(nn.Module):
         assert (q_seqlen // self.q_bucket_size) == (k_seqlen // self.k_bucket_size)
         n_buckets = q_seqlen // self.q_bucket_size
 
-        q_buckets = l2_hash(self.n_hashes, n_buckets, alsh_queries(query), r=1.25)
-        k_buckets = l2_hash(self.n_hashes, n_buckets, alsh_keys(key), r=200)
+        q_buckets = l2_hash(alsh_queries(query), n_hashes=self.n_hashes,
+                            n_buckets=n_buckets, r=2.5)
+        k_buckets = l2_hash(alsh_keys(key), n_hashes=self.n_hashes,
+                            n_buckets=n_buckets, r=2.5)
+
+
+        # (batch_size * N, n_hashes) -> (batch_size, n_hashes * N)
+        q_buckets = q_buckets.reshape(batch_size, q_seqlen, self.n_hashes) \
+                             .permute(0, 2, 1).reshape(batch_size, -1)
+
+        k_buckets = k_buckets.reshape(batch_size, k_seqlen, self.n_hashes) \
+                             .permute(0, 2, 1).reshape(batch_size, -1)
+
 
         if self.add_local_attn_hash:
             local_buckets = torch.full((batch_size, seqlen), n_buckets, device=device, dtype=torch.long)
@@ -333,11 +344,13 @@ class RandomBucketsAttention(nn.Module):
 
         hashes_offset = torch.empty(n_hashes, device=device, dtype=torch.long).fill_(k_seqlen) * torch.arange(self.n_hashes, device=device)
 
+        # new_shape: (max_perms, k_seqlen, n_hashes)
         self.s_k_ticker = k_random_perms.permute(0, 2, 1) + hashes_offset
 
         del k_random_perms
         del hashes_offset
 
+        # (max_perms, n_hashes, k_seqlen) -> (max_perms, n_hashes * k_seqlen)
         self.s_k_ticker = self.s_k_ticker.permute(0, 2, 1).reshape(max_perms, -1)
 
         k_ticker = torch.arange(self.n_hashes * k_seqlen, device=device).unsqueeze(0).expand_as(self.s_k_ticker)
