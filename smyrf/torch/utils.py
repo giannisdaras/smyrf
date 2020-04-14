@@ -5,6 +5,78 @@ from collections import defaultdict, Counter
 import numpy as np
 from tqdm import tqdm
 import random
+from balanced_kmeans import kmeans_equal
+from knn_cuda import KNN
+
+def get_kmeans_buckets(Queries, Keys, q_cluster_size,
+                       k_cluster_size, max_iters=None,
+                       progress=False):
+    num_clusters = Queries.shape[1] // q_cluster_size
+    assert num_clusters == (Keys.shape[1] // k_cluster_size), 'Unequal number of clusters for queries and keys.'
+    q_buckets, q_centers = kmeans_equal(Queries, num_clusters=num_clusters,
+                                        cluster_size=q_cluster_size,
+                                        max_iters=max_iters,
+                                        progress=progress)
+
+    k_buckets, _ = kmeans_equal(Keys, num_clusters=num_clusters, cluster_size=k_cluster_size,
+                 initial_state=q_centers, update_centers=False)
+
+    return q_buckets.argsort(dim=-1), k_buckets.argsort(dim=-1)
+
+
+def get_competitive_matching_buckets(Queries, Keys,
+                                     per_category_cluster_size):
+    # IMPORTANT: for repetitive runs, consider permuting the sequences first
+    # permute sequence
+    # perm_ticker = torch.randperm(N)
+    # perm_keys = keys[perm_ticker]
+    # perm_queries = queries[perm_ticker]
+    # perm_Keys = Keys[perm_ticker]
+    # perm_Queries = Queries[perm_ticker]
+    # q_positions[i] = perm_ticker[q_indices]
+    # k_positions[i] = perm_ticker[k_indices]
+    device = Queries.device
+
+    print('Loading kNN')
+    knn = KNN(k=per_category_cluster_size, transpose_mode=True)
+    index = 0
+    q_buckets = []
+    k_buckets = []
+    remaining_queries = set([x for x in range(N)])
+    # find for keys, using as "knowledge" queries.
+    k_q_indices = knn(Queries.unsqueeze(0), Keys.unsqueeze(0))[1][0]
+    # find for queries, using as "knowledge" keys.
+    q_k_indices = knn(Keys.unsqueeze(0), Queries.unsqueeze(0))[1][0]
+    for i in tqdm(range(N)):
+        if len(q_buckets) == N: break
+        if i in remaining_queries:
+            remaining_queries.remove(i)
+            found_keys = [x.item() for x in q_k_indices[i]]
+
+            found_queries = [i]
+            for k_ind in found_keys:
+                matched_queries = [x.item() for x in k_q_indices[k_ind]]
+                for q_ind in matched_queries:
+                    if q_ind in remaining_queries:
+                        found_queries.append(q_ind)
+                        remaining_queries.remove(q_ind)
+                    if len(found_queries) == per_category_cluster_size:
+                        break
+
+                if len(found_queries) == per_category_cluster_size:
+                    break
+
+            while len(found_queries) < per_category_cluster_size:
+                q_ind = random.sample(remaining_queries, 1)[0]
+                remaining_queries.remove(q_ind)
+                found_queries.append(q_ind)
+
+            q_buckets.extend(found_queries)
+            k_buckets.extend(found_keys)
+    q_indices = torch.tensor(q_buckets, device=device)
+    k_indices = torch.tensor(k_buckets, device=device)
+    return q_indices, k_indices
+
 
 
 def get_achlioptas(dim, device='cuda'):
