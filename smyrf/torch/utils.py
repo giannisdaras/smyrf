@@ -325,6 +325,26 @@ class XBOX(AsymmetricTransform):
         return torch.cat((x, zero), -1)
 
 
+class XBOXPLUS(AsymmetricTransform):
+    def set_norms(self, queries, keys):
+        self.q_norms = queries.norm(p=2, dim=-1).unsqueeze(-1)
+        self.MQ = torch.max(self.q_norms, dim=1).values.unsqueeze(-1)
+
+        self.k_norms = keys.norm(p=2, dim=-1).unsqueeze(-1)
+        self.MK = torch.max(self.k_norms, dim=1).values.unsqueeze(-1)
+
+
+    def K(self, x):
+        ext = torch.sqrt(self.MQ**2 + self.MK**2 - self.k_norms**2)
+        zero = torch.tensor([0.0], device=x.device).repeat(x.shape[:-1], 1).unsqueeze(-1)
+        return torch.cat((x, ext, zero), -1)
+
+    def Q(self, x):
+        ext = torch.sqrt(self.MQ**2 + self.MK**2 - self.q_norms**2)
+        zero = torch.tensor([0.0], device=x.device).repeat(x.shape[:-1], 1).unsqueeze(-1)
+        return torch.cat((x, zero, ext), -1)
+
+
 class H2LSH(AsymmetricTransform):
     '''
         "Advanced" xbox for queries. Technique: H2-ALSH.
