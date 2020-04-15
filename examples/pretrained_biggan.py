@@ -9,6 +9,7 @@ from categories import indx2category
 import torch
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--weights_root', default='/home/giannis/image2noise/image2noise/biggan_noise/')
 parser.add_argument('--bs', default=1, type=int)
 parser.add_argument('--device', default='cuda')
 parser.add_argument('--seed', type=int)
@@ -129,7 +130,7 @@ if __name__ == '__main__':
         'device': 'cuda',
         'n_classes': 1000,
         'load_weights': '',
-        'weights_root': '/home/giannis/image2noise/image2noise/biggan_noise/',
+        'weights_root': args.weights_root,
         'experiment_name': '138k',
         'lr': 0.01,
         'optimization_steps': 600,
