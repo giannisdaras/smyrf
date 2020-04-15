@@ -13,16 +13,24 @@ parser.add_argument('--weights_root', default='/home/giannis/image2noise/image2n
 parser.add_argument('--bs', default=1, type=int)
 parser.add_argument('--device', default='cuda')
 parser.add_argument('--seed', type=int)
+# Clustering configuration
 parser.add_argument('--n_hashes', type=int, default=4)
 parser.add_argument('--q_cluster_size', type=int, default=32)
 parser.add_argument('--q_attn_size', type=int, default=None)
+parser.add_argument('--clustering_algo', default='lsh')
+
+## Balanced K-means
 parser.add_argument('--max_iters', type=int, default=50)
+parser.add_argument('--progress', default=False, action='store_true',
+                    help='Show progress of kmeans.')
+## LSH
+parser.add_argument('--r', default=1, type=int)
+
 parser.add_argument('--imagenet_category', default='maltese')
 parser.add_argument('--do_sample', default=False, action='store_true')
 parser.add_argument('--do_metrics', default=False, action='store_true')
-parser.add_argument('--progress', default=False, action='store_true',
-                    help='Show progress of kmeans.')
 parser.add_argument('--disable_smyrf', action='store_true', default=False)
+
 # metrics configuration
 parser.add_argument('--dataset', default='I128_hdf5',
                     help='Which HDF5 file to use')
@@ -136,13 +144,17 @@ if __name__ == '__main__':
         'optimization_steps': 600,
         # SMYRF configuration
         'smyrf': not args.disable_smyrf,
+        'clustering_algo': args.clustering_algo,
         'n_hashes': args.n_hashes,
         'q_cluster_size': args.q_cluster_size,
         'k_cluster_size': args.q_cluster_size // 4,
         'q_attn_size': args.q_attn_size,
         'k_attn_size': args.q_attn_size // 4 if args.q_attn_size else None,
+        ## K-means
         'max_iters': args.max_iters,
         'progress': args.progress,
+        ## LSH
+        'r': args.r,
         # Metrics configuration
         'dataset': args.dataset,
         'num_inception_images': args.num_inception_images,
@@ -168,7 +180,6 @@ if __name__ == '__main__':
             config['dataset'], parallel=True, no_fid=False)
 
         def get_metrics():
-
             def sample():
                 images, labels = biggan.sample(biggan.get_random_inputs(bs=args.bs))
                 return images, labels
@@ -183,16 +194,3 @@ if __name__ == '__main__':
             print(outstring)
 
         get_metrics()
-
-    # # Sample truncation curve stuff. This is basically the same as the inception metrics code
-    # if config['sample_trunc_curves']:
-    #     start, step, end = [float(item) for item in config['sample_trunc_curves'].split('_')]
-    #     print('Getting truncation values for variance in range (%3.3f:%3.3f:%3.3f)...' % (start, step, end))
-    #     for var in np.arange(start, end + step, step):
-    #       z_.var = var
-    #       # Optionally comment this out if you want to run with standing stats
-    #       # accumulated at one z variance setting
-    #       if config['accumulate_stats']:
-    #         utils.accumulate_standing_stats(G, z_, y_, config['n_classes'],
-    #                                     config['num_standing_accumulations'])
-    #       get_metrics()
