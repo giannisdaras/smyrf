@@ -6,7 +6,6 @@ import numpy as np
 from tqdm import tqdm
 import random
 from balanced_kmeans import kmeans_equal
-from knn_cuda import KNN
 
 def get_kmeans_buckets(Queries, Keys, q_cluster_size,
                        k_cluster_size, max_iters=None,
@@ -36,6 +35,7 @@ def get_competitive_matching_buckets(Queries, Keys,
     # q_positions[i] = perm_ticker[q_indices]
     # k_positions[i] = perm_ticker[k_indices]
     device = Queries.device
+    from knn_cuda import KNN
 
     print('Loading kNN')
     knn = KNN(k=per_category_cluster_size, transpose_mode=True)
