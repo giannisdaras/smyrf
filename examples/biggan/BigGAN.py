@@ -64,6 +64,8 @@ class Generator(nn.Module):
                G_param='SN', norm_style='bn',
                smyrf=False,
                n_hashes=8,
+               clustering_algo='lsh',
+               r=1,
                q_cluster_size=64,
                k_cluster_size=16,
                q_attn_size=64,
@@ -180,13 +182,15 @@ class Generator(nn.Module):
             print('Attention type: SMYRF')
             self.blocks[-1] += [layers.AttentionApproximation(self.arch['out_channels'][index],
                                                               n_hashes=n_hashes,
+                                                              clustering_algo=clustering_algo,
                                                               q_cluster_size=q_cluster_size,
                                                               k_cluster_size=k_cluster_size,
                                                               q_attn_size=q_attn_size,
                                                               k_attn_size=k_attn_size,
                                                               which_conv=self.which_conv,
                                                               progress=progress,
-                                                              max_iters=max_iters)]
+                                                              max_iters=max_iters,
+                                                              r=r)]
         else:
             self.blocks[-1] += [layers.Attention(self.arch['out_channels'][index], self.which_conv)]
 

@@ -12,6 +12,7 @@ def get_kmeans_buckets(Queries, Keys, q_cluster_size,
                        progress=False):
     num_clusters = Queries.shape[1] // q_cluster_size
     assert num_clusters == (Keys.shape[1] // k_cluster_size), 'Unequal number of clusters for queries and keys.'
+
     q_buckets, q_centers = kmeans_equal(Queries, num_clusters=num_clusters,
                                         cluster_size=q_cluster_size,
                                         max_iters=max_iters,

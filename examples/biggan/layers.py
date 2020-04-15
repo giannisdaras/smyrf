@@ -174,6 +174,7 @@ class Attention(nn.Module):
 class AttentionApproximation(nn.Module):
   def __init__(self, ch, n_hashes, q_cluster_size, k_cluster_size,
                q_attn_size=None, k_attn_size=None, max_iters=10,
+               r=1, clustering_algo='lsh',
                progress=False, which_conv=SNConv2d, name='attention'):
      '''
         SmyrfAttention for BigGAN.
@@ -198,7 +199,9 @@ class AttentionApproximation(nn.Module):
                                  k_cluster_size=k_cluster_size,
                                  q_attn_size=q_attn_size,
                                  k_attn_size=k_attn_size,
-                                 max_iters=max_iters)
+                                 max_iters=max_iters,
+                                 clustering_algo=clustering_algo,
+                                 r=r)
      self.progress = progress
 
   def forward(self, x, y=None):

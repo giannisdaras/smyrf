@@ -6,16 +6,19 @@ from torch.autograd import Function
 from functools import partial, reduce
 from itertools import chain
 from smyrf.torch.utils import *
-from balanced_kmeans import kmeans_equal
+from balanced_kmeans import kmeans_equal, lsh_clustering
 
 class SmyrfAttention(nn.Module):
     def __init__(self, n_hashes, q_cluster_size, k_cluster_size,
-                 q_attn_size=None, k_attn_size=None, dropout=0.,
+                 q_attn_size=None, k_attn_size=None,
+                 clustering_algo='lsh',
+                 dropout=0.,
+                 # LSH clustering
+                 r=1,
+                 # kmeans clustering
                  max_iters=50):
         super(SmyrfAttention, self).__init__()
         self.n_hashes = n_hashes
-        self.q_cluster_size = q_cluster_size
-        self.k_cluster_size = k_cluster_size
 
         if q_attn_size is None:
             self.q_attn_size = q_cluster_size
@@ -29,7 +32,20 @@ class SmyrfAttention(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
         self.xbox_plus = XBOXPLUS()
-        self.max_iters = max_iters
+
+        self.clustering_algo =  clustering_algo
+        if clustering_algo == 'lsh':
+            self.clustering_params = {
+                'r': r,
+            }
+        elif clustering_algo == 'kmeans_equal':
+            self.clustering_params = {
+                'max_iters' : max_iters,
+                'q_cluster_size' : q_cluster_size,
+                'k_cluster_size': k_cluster_size
+            }
+        else:
+            raise NotImplementedError('Uknown clustering algorithm')
 
 
     def forward(self, queries, keys, values, attn_mask=None, progress=False):
@@ -39,16 +55,22 @@ class SmyrfAttention(nn.Module):
         assert queries.device == keys.device, 'Queries, keys in different devices'
         device = queries.device
 
-        # XBOX transform
         with torch.no_grad():
+            # XBOX+ transform
             self.xbox_plus.set_norms(queries, keys)
             Queries = self.xbox_plus.Q(queries).repeat(self.n_hashes, 1, 1)
             Keys = self.xbox_plus.K(keys).repeat(self.n_hashes, 1, 1)
-            q_positions, k_positions = get_kmeans_buckets(Queries, Keys,
-                                                          self.q_cluster_size,
-                                                          self.k_cluster_size,
-                                                          max_iters=self.max_iters,
-                                                          progress=progress)
+
+            num_clusters = Queries.shape[1] // self.q_attn_size
+            assert num_clusters == (Keys.shape[1] // self.k_attn_size), 'Unequal number of clusters for queries and keys.'
+
+            if self.clustering_algo == 'lsh':
+                q_positions = lsh_clustering(Queries, **self.clustering_params)
+                k_positions = lsh_clustering(Keys, **self.clustering_params)
+            elif self.clustering_algo == 'kmeans_equal':
+                q_positions, k_positions = get_kmeans_buckets(Queries,
+                                                              Keys,
+                                                              **self.clustering_params)
 
             q_positions = q_positions.reshape(self.n_hashes, bs, -1)
             k_positions = k_positions.reshape(self.n_hashes, bs, -1)
