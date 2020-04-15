@@ -164,7 +164,7 @@ if __name__ == '__main__':
         logging.log(logging.INFO, 'Preparing random sample sheet...')
 
         get_inception_metrics = inception_utils.prepare_inception_metrics(
-            config['dataset'], parallel=True, no_fid=True)
+            config['dataset'], parallel=True, no_fid=False)
 
         def get_metrics():
 
