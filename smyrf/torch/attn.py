@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from torch.autograd import Function
 from functools import partial, reduce
 from itertools import chain
-from pytorch_memlab import profile
 from smyrf.torch.utils import *
 from balanced_kmeans import kmeans_equal
 
