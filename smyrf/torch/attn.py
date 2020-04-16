@@ -37,6 +37,7 @@ class SmyrfAttention(nn.Module):
         if clustering_algo == 'lsh':
             self.clustering_params = {
                 'r': r,
+                'n_hashes': self.n_hashes
             }
         elif clustering_algo == 'kmeans_equal':
             self.clustering_params = {
@@ -58,8 +59,8 @@ class SmyrfAttention(nn.Module):
         with torch.no_grad():
             # XBOX+ transform
             self.xbox_plus.set_norms(queries, keys)
-            Queries = self.xbox_plus.Q(queries).repeat(self.n_hashes, 1, 1)
-            Keys = self.xbox_plus.K(keys).repeat(self.n_hashes, 1, 1)
+            Queries = self.xbox_plus.Q(queries)
+            Keys = self.xbox_plus.K(keys)
 
             num_clusters = Queries.shape[1] // self.q_attn_size
             assert num_clusters == (Keys.shape[1] // self.k_attn_size), 'Unequal number of clusters for queries and keys.'
@@ -68,6 +69,8 @@ class SmyrfAttention(nn.Module):
                 q_positions = lsh_clustering(Queries, **self.clustering_params)
                 k_positions = lsh_clustering(Keys, **self.clustering_params)
             elif self.clustering_algo == 'kmeans_equal':
+                Queries = Queries.repeat(self.n_hashes, 1, 1)
+                Keys = Keys.repeat(self.n_hashes, 1, 1)
                 q_positions, k_positions = get_kmeans_buckets(Queries,
                                                               Keys,
                                                               **self.clustering_params)
