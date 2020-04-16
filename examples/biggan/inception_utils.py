@@ -258,7 +258,8 @@ def accumulate_inception_activations(sample, net, num_inception_images=50000):
       logits += [F.softmax(logits_val, 1)]
       labels += [labels_val]
       pbar.update(labels[-1].shape[0])
-
+      # free memory
+      del images, labels_val, pool_val, logits_val
   return torch.cat(pool, 0), torch.cat(logits, 0), torch.cat(labels, 0)
 
 
