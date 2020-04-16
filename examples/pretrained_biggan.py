@@ -24,7 +24,7 @@ parser.add_argument('--max_iters', type=int, default=50)
 parser.add_argument('--progress', default=False, action='store_true',
                     help='Show progress of kmeans.')
 ## LSH
-parser.add_argument('--r', default=1, type=int)
+parser.add_argument('--r', default=1, type=float)
 
 parser.add_argument('--imagenet_category', default='maltese')
 parser.add_argument('--do_sample', default=False, action='store_true')
