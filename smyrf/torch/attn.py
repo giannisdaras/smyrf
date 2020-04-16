@@ -96,6 +96,8 @@ class SmyrfAttention(nn.Module):
                          .gather(2, k_positions.unsqueeze(-1)\
                          .repeat(1, 1, 1, v_dim))\
                          .reshape(-1, self.k_attn_size, v_dim)
+        # free memory
+        del q_positions, k_positions
 
         inner = s_queries @ s_keys.transpose(2, 1)
         # softmax denominator
@@ -113,8 +115,12 @@ class SmyrfAttention(nn.Module):
         slogits = dots_logsumexp.reshape(self.n_hashes, bs, -1)
         logits = torch.gather(slogits, 2, q_rev_positions)
 
+        # free memory
+        del q_rev_positions
+
         probs = torch.exp(logits - torch.logsumexp(logits, dim=0, keepdim=True))
         out = torch.sum(o * probs.unsqueeze(-1), dim=0)
+
         return out
 
 
