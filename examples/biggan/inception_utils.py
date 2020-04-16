@@ -247,7 +247,7 @@ def calculate_inception_score(pred, num_splits=10):
 # activations. Return the pool, the logits, and the labels (if one wants
 # Inception Accuracy the labels of the generated class will be needed)
 def accumulate_inception_activations(sample, net, num_inception_images=50000):
-  pool, logits, labels = [], [], []
+  pool, logits = [], []
   pbar = tqdm(range(num_inception_images))
   pbar.set_description('Sampling...')
   while (torch.cat(logits, 0).shape[0] if len(logits) else 0) < num_inception_images:
@@ -256,11 +256,10 @@ def accumulate_inception_activations(sample, net, num_inception_images=50000):
       pool_val, logits_val = net(images.float())
       pool += [pool_val]
       logits += [F.softmax(logits_val, 1)]
-      labels += [labels_val]
       pbar.update(labels[-1].shape[0])
       # free memory
       del images, labels_val, pool_val, logits_val
-  return torch.cat(pool, 0), torch.cat(logits, 0), torch.cat(labels, 0)
+  return torch.cat(pool, 0), torch.cat(logits, 0)
 
 
 # Load and wrap the Inception model
@@ -291,7 +290,7 @@ def prepare_inception_metrics(dataset, parallel, no_fid=False):
                             use_torch=True):
 
     logging.log(logging.INFO, 'Gathering activations...')
-    pool, logits, labels = accumulate_inception_activations(sample, net, num_inception_images)
+    pool, logits = accumulate_inception_activations(sample, net, num_inception_images)
     logging.log(logging.INFO, 'Calculating Inception Score...')
 
     IS_mean, IS_std = calculate_inception_score(logits.cpu().numpy(), num_splits)
@@ -309,7 +308,7 @@ def prepare_inception_metrics(dataset, parallel, no_fid=False):
         FID = float(FID.cpu().numpy())
       else:
         FID = numpy_calculate_frechet_distance(mu.cpu().numpy(), sigma.cpu().numpy(), data_mu, data_sigma)
-    # Delete mu, sigma, pool, logits, and labels, just in case
-    del mu, sigma, pool, logits, labels
+    # Delete mu, sigma, pool, logits just in case
+    del mu, sigma, pool, logits
     return IS_mean, IS_std, FID
   return get_inception_metrics
