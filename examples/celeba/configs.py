@@ -117,8 +117,9 @@ celeba_config = {
     'save_every': 2000,
     'num_save_copies': 2,
     'num_best_copies': 5,
-    'which_best': 'IS',
+    'which_best': 'FID',
     'no_fid': False,
+    'no_inception': True, # there is no meaning in getting Inception score in Celeba
     'resume': False,
     'load_weights': '',
     'base_root': '',

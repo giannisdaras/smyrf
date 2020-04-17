@@ -114,7 +114,7 @@ def run(config):
   test_metrics_fname = '%s/%s_log.jsonl' % (config['logs_root'],
                                             experiment_name)
   train_metrics_fname = '%s/%s' % (config['logs_root'], experiment_name)
-  print('Inception Metrics will be saved to {}'.format(test_metrics_fname))
+  print('Test Metrics will be saved to {}'.format(test_metrics_fname))
   test_log = utils.MetricsLogger(test_metrics_fname,
                                  reinitialize=(not config['resume']))
   print('Training Metrics will be saved to {}'.format(train_metrics_fname))
@@ -129,12 +129,14 @@ def run(config):
   # a full D iteration (regardless of number of D steps and accumulations)
   D_batch_size = (config['batch_size'] * config['num_D_steps']
                   * config['num_D_accumulations'])
-
   loader = utils.get_data_loaders(**{**config, 'batch_size': D_batch_size,
                                       'start_itr': state_dict['itr']})
 
   # Prepare inception metrics: FID and IS
-  get_inception_metrics = inception_utils.prepare_inception_metrics(config['dataset'], config['parallel'], config['no_fid'])
+  get_inception_metrics = inception_utils.prepare_inception_metrics(
+      config['dataset'], config['parallel'],
+      no_inception=config['no_inception'],
+      no_fid=config['no_fid'])
 
   # Prepare noise and randomly sampled label arrays
   # Allow for different batch sizes in G

@@ -276,7 +276,7 @@ def load_inception_net(parallel=False):
 # and iterates until it accumulates config['num_inception_images'] images.
 # The iterator can return samples with a different batch size than used in
 # training, using the setting confg['inception_batchsize']
-def prepare_inception_metrics(dataset, parallel, no_fid=False):
+def prepare_inception_metrics(dataset, parallel, no_inception=True, no_fid=False):
   # Load metrics; this is intentionally not in a try-except loop so that
   # the script will crash here if it cannot find the Inception moments.
   # By default, remove the "hdf5" from dataset
@@ -293,7 +293,12 @@ def prepare_inception_metrics(dataset, parallel, no_fid=False):
     pool, logits = accumulate_inception_activations(sample, net, num_inception_images)
     logging.log(logging.INFO, 'Calculating Inception Score...')
 
-    IS_mean, IS_std = calculate_inception_score(logits.cpu().numpy(), num_splits)
+    if no_inception:
+        IS_mean = 0.0
+        IS_std = 0.0
+    else:
+        IS_mean, IS_std = calculate_inception_score(logits.cpu().numpy(), num_splits)
+
     if no_fid:
       FID = 9999.0
     else:
@@ -302,7 +307,7 @@ def prepare_inception_metrics(dataset, parallel, no_fid=False):
         mu, sigma = torch.mean(pool, 0), torch_cov(pool, rowvar=False)
       else:
         mu, sigma = np.mean(pool.cpu().numpy(), axis=0), np.cov(pool.cpu().numpy(), rowvar=False)
-        logging.log(logging.INFO, 'Covariances calculated, getting FID...')
+      logging.log(logging.INFO, 'Covariances calculated, getting FID...')
       if use_torch:
         FID = torch_calculate_frechet_distance(mu, sigma, torch.tensor(data_mu).float().cuda(), torch.tensor(data_sigma).float().cuda())
         FID = float(FID.cpu().numpy())
