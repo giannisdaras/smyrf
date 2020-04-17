@@ -17,12 +17,12 @@ from sync_batchnorm import SynchronizedBatchNorm2d as SyncBatchNorm2d
 # Attention is passed in in the format '32_64' to mean applying an attention
 # block at both resolution 32x32 and 64x64. Just '64' will apply at 64x64.
 def G_arch(ch=64, attention='64', ksize='333333', dilation='111111'):
-  arch[512] = {'in_channels' :  [ch * item for item in [16, 16, 8, 8, 4, 2, 1]],
-               'out_channels' : [ch * item for item in [16,  8, 8, 4, 2, 1, 1]],
-               'upsample' : [True] * 7,
-               'resolution' : [8, 16, 32, 64, 128, 256, 512],
+  arch[1024] = {'in_channels' :  [ch * item for item in [16, 16, 8, 8, 4, 4, 2, 1]],
+               'out_channels' : [ch * item for item in [16,  8, 8, 4, 4, 2, 1, 1]],
+               'upsample' : [True] * 8,
+               'resolution' : [8, 16, 32, 64, 128, 256, 512, 1024],
                'attention' : {2**i: (2**i in [int(item) for item in attention.split('_')])
-                              for i in range(3,10)}}
+                              for i in range(3, 11)}}
   arch[512] = {'in_channels' :  [ch * item for item in [16, 16, 8, 8, 4, 2, 1]],
                'out_channels' : [ch * item for item in [16,  8, 8, 4, 2, 1, 1]],
                'upsample' : [True] * 7,
