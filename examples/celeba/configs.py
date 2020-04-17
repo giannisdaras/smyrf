@@ -27,7 +27,6 @@ celeba_config = {
     'num_epochs': 100,
     'G_fp16': False,
     'D_fp16': False,
-    'experiment_name': '138k',
     'ema': True,
     'num_G_SVs': 1,
     'num_D_SVs': 1,
@@ -37,8 +36,6 @@ celeba_config = {
     'D_ortho': 0.0,
     'device': 'cuda',
     'n_classes': 1000,
-    'load_weights': '',
-    'weights_root': '',
     'experiment_name': '138k',
     'lr': 0.01,
     'optimization_steps': 600,
@@ -59,5 +56,10 @@ celeba_config = {
     'dataset': 'celeba',
     'num_inception_images': 10000,
     # Checkpointing
-    'resume': False
+    'resume': False,
+    'load_weights': '',
+    'weights_root': '',
+    'base_root': ''
+    'experiment_name': 'celeba1024',
+
 }
