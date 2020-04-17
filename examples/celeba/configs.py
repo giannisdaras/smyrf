@@ -30,12 +30,6 @@ celeba_config = {
     'D_attn': '64',
     'mybn': False,
     'norm_style': 'bn',
-    'batch_size': 1,
-    'G_batch_size': 1,
-
-    'num_epochs': 100,
-    'G_fp16': False,
-    'D_fp16': False,
 
     ## Initialization
     'seed': 0,
@@ -66,8 +60,8 @@ celeba_config = {
     'config_from_name': False,
 
     # Precision
-    'G_fp16': True,
-    'D_fp16': True,
+    'G_fp16': False,
+    'D_fp16': False,
     'D_mixed_precision': False,
     'G_mixed_precision': False,
     'accumulate_stats': False,
