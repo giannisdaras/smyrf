@@ -1061,13 +1061,12 @@ def initiate_standing_stats(net):
       module.accumulate_standing = True
 
 
-def accumulate_standing_stats(net, z, y, nclasses, num_accumulations=16):
+def accumulate_standing_stats(net, sample, nclasses, num_accumulations=16):
   initiate_standing_stats(net)
   net.train()
   for i in range(num_accumulations):
     with torch.no_grad():
-      z.normal_()
-      y.random_(0, nclasses)
+      z, y = sample()
       x = net(z, net.shared(y)) # No need to parallelize here unless using syncbn
   # Set to eval mode
   net.eval()
