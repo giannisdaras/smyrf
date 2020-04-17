@@ -131,7 +131,7 @@ celeba_config = {
     'base_root': './',
     'data_root': './',
     'logs_root': 'logs/',
-    'samples_root': 'samples/'
+    'samples_root': 'samples/',
     'experiment_name': 'celeba1024',
     'hash_name': False,
 }
