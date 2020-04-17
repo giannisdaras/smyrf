@@ -58,6 +58,8 @@ celeba_config = {
     ## Others:
     'split_D': False,
     'config_from_name': False,
+    'G_eval_mode': False,
+    'D_eval_mode': False,
 
     # Precision
     'G_fp16': False,
