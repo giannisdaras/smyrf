@@ -9,33 +9,24 @@ import torch.utils.data as data
 
 
 class CelebAHQ(data.Dataset):
-    def __init__(self, img_path, transform_img, mode):
+    def __init__(self, img_path, transform_img):
         self.img_path = img_path
         self.transform_img = transform_img
-        self.train_dataset = []
-        self.test_dataset = []
-        self.mode = mode
+        self.data = []
         self.preprocess()
-
-        if mode == True:
-            self.num_images = len(self.train_dataset)
-        else:
-            self.num_images = len(self.test_dataset)
+        self.num_images = len(self.data)
 
     def preprocess(self):
         length = len([name for name in os.listdir(self.img_path) if os.path.isfile(os.path.join(self.img_path, name))])
         for i in tqdm(range(length)):
             img_path = os.path.join(self.img_path, str(i)+ '.jpg')
             print(img_path)
-            if self.mode == True:
-                self.train_dataset.append(img_path)
-            else:
-                self.test_dataset.append(img_path)
+            self.data.append(img_path)
         print('Finished preprocessing the CelebA dataset...')
 
 
     def __getitem__(self, index):
-        dataset = self.train_dataset if self.mode == True else self.test_dataset
+        dataset = self.data
         img_path = dataset[index]
         image = Image.open(img_path)
         return self.transform_img(image)

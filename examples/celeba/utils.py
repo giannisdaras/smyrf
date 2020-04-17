@@ -506,52 +506,23 @@ class MultiEpochSampler(torch.utils.data.Sampler):
 
 # Convenience function to centralize all data loaders
 def get_data_loaders(dataset, data_root=None, augment=False, batch_size=64,
-                     num_workers=8, shuffle=True, load_in_mem=False, hdf5=False,
+                     num_workers=8, shuffle=True, load_in_mem=False,
                      pin_memory=True, drop_last=True, start_itr=0,
                      num_epochs=500, use_multiepoch_sampler=False,
                      **kwargs):
 
-  # Append /FILENAME.hdf5 to root if using hdf5
-  data_root += '/%s' % root_dict[dataset]
-  print('Using dataset root location %s' % data_root)
 
   which_dataset = dset_dict[dataset]
   norm_mean = [0.5,0.5,0.5]
   norm_std = [0.5,0.5,0.5]
   image_size = imsize_dict[dataset]
-  # For image folder datasets, name of the file where we store the precomputed
-  # image locations to avoid having to walk the dirs every time we load.
-  dataset_kwargs = {'index_filename': '%s_imgs.npz' % dataset}
-
-  # HDF5 datasets have their own inbuilt transform, no need to train_transform
-  if 'hdf5' in dataset:
-    train_transform = None
-  else:
-    if augment:
-      print('Data will be augmented...')
-      if dataset in ['C10', 'C100']:
-        train_transform = [transforms.RandomCrop(32, padding=4),
-                           transforms.RandomHorizontalFlip()]
-      else:
-        train_transform = [RandomCropLongEdge(),
-                         transforms.Resize(image_size),
-                         transforms.RandomHorizontalFlip()]
-    else:
-      print('Data will not be augmented...')
-      if dataset in ['C10', 'C100']:
-        train_transform = []
-      else:
-        train_transform = [CenterCropLongEdge(), transforms.Resize(image_size)]
-      # train_transform = [transforms.Resize(image_size), transforms.CenterCrop]
-    train_transform = transforms.Compose(train_transform + [
+  print('Data will not be augmented...')
+  train_transform = transforms.Compose([
                      transforms.ToTensor(),
                      transforms.Normalize(norm_mean, norm_std)])
-  train_set = which_dataset(root=data_root, transform=train_transform,
-                            load_in_mem=load_in_mem, **dataset_kwargs)
 
-  # Prepare loader; the loaders list is for forward compatibility with
-  # using validation / test splits.
-  loaders = []
+  train_set = which_dataset(data_root, train_transform)
+
   if use_multiepoch_sampler:
     print('Using multiepoch sampler from start_itr %d...' % start_itr)
     loader_kwargs = {'num_workers': num_workers, 'pin_memory': pin_memory}
@@ -563,8 +534,7 @@ def get_data_loaders(dataset, data_root=None, augment=False, batch_size=64,
                      'drop_last': drop_last} # Default, drop last incomplete batch
     train_loader = DataLoader(train_set, batch_size=batch_size,
                               shuffle=shuffle, **loader_kwargs)
-  loaders.append(train_loader)
-  return loaders
+  return train_loader
 
 
 # Utility file to seed rngs
@@ -1064,24 +1034,6 @@ class Distribution(torch.Tensor):
     new_obj.init_distribution(self.dist_type, **self.dist_kwargs)
     new_obj.data = super().to(*args, **kwargs)
     return new_obj
-
-
-# # Convenience function to prepare a z and y vector
-# def prepare_z_y(G_batch_size, dim_z, nclasses, device='cuda',
-#                 fp16=False,z_var=1.0):
-#
-#   z_ = Distribution(torch.randn(G_batch_size, dim_z, requires_grad=False))
-#   z_.init_distribution('normal', mean=0, var=z_var)
-#   z_ = z_.to(device,torch.float16 if fp16 else torch.float32)
-#
-#   if fp16:
-#     z_ = z_.half()
-#
-#   y_ = Distribution(torch.zeros(G_batch_size, requires_grad=False))
-#   y_.init_distribution('categorical',num_categories=nclasses)
-#   y_ = y_.to(device, torch.int64)
-#   import pdb; pdb.set_trace()
-#   return z_, y_
 
 
 # Convenience function to prepare a z and y vector
