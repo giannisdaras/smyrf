@@ -401,7 +401,7 @@ def add_sample_parser(parser):
   return parser
 
 # Convenience dicts
-dset_dict = {'celeba': dsets.CelebAHQ}
+dset_dict = {'celeba': dset.CelebAHQ}
 
 imsize_dict = {'celeba': 1024}
 
