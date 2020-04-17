@@ -2,7 +2,6 @@ import sys
 import argparse
 import torchvision
 import logging
-sys.path.append('biggan/')
 import utils
 import inception_utils
 from categories import indx2category
