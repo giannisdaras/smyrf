@@ -129,7 +129,7 @@ celeba_config = {
     'load_weights': '',
     'weights_root': 'celeba_weights',
     'base_root': './',
-    'data_root': './',
+    'data_root': 'CelebAMask-HQ/CelebA-HQ-img',
     'logs_root': 'logs/',
     'samples_root': 'samples/',
     'experiment_name': 'celeba1024',
