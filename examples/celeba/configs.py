@@ -58,4 +58,6 @@ celeba_config = {
     # Metrics configuration
     'dataset': 'celeba',
     'num_inception_images': 10000,
+    # Checkpointing
+    'resume': False
 }
