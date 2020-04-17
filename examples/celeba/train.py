@@ -147,8 +147,6 @@ def run(config):
   fixed_z, fixed_y = utils.prepare_z_y(G_batch_size, G.dim_z,
                                        config['n_classes'], device=device,
                                        fp16=config['G_fp16'])
-  fixed_z.sample_()
-  fixed_y.sample_()
   # Loader is loaded, prepare the training function
   if config['which_train_fn'] == 'GAN':
     train = train_fns.GAN_training_function(G, D, GD, z_, y_,
@@ -156,11 +154,10 @@ def run(config):
   # Else, assume debugging and use the dummy train fn
   else:
     train = train_fns.dummy_training_function()
-  # Prepare Sample function for use with inception metrics
-  sample = functools.partial(utils.sample,
-                              G=(G_ema if config['ema'] and config['use_ema']
-                                 else G),
-                              z_=z_, y_=y_, config=config)
+
+  sample = lambda: utils.prepare_z_y(G_batch_size, G.dim_z,
+                                     config['n_classes'], device=device,
+                                     fp16=config['G_fp16'])
 
   print('Beginning training at epoch %d...' % state_dict['epoch'])
   # Train for specified number of epochs, although we mostly track G iterations.
