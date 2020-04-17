@@ -20,7 +20,6 @@ class CelebAHQ(data.Dataset):
         length = len([name for name in os.listdir(self.img_path) if os.path.isfile(os.path.join(self.img_path, name))])
         for i in tqdm(range(length)):
             img_path = os.path.join(self.img_path, str(i)+ '.jpg')
-            print(img_path)
             self.data.append(img_path)
         print('Finished preprocessing the CelebA dataset...')
 
