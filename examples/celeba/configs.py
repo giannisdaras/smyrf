@@ -59,7 +59,7 @@ celeba_config = {
     'resume': False,
     'load_weights': '',
     'weights_root': '',
-    'base_root': ''
+    'base_root': '',
     'experiment_name': 'celeba1024',
 
 }
