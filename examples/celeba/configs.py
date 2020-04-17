@@ -58,8 +58,8 @@ celeba_config = {
     # Checkpointing
     'resume': False,
     'load_weights': '',
-    'weights_root': '',
-    'base_root': '',
+    'weights_root': 'celeba_weights',
+    'base_root': 'celeba_base',
     'experiment_name': 'celeba1024',
 
 }
