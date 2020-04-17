@@ -28,11 +28,10 @@ import utils
 import losses
 import train_fns
 from sync_batchnorm import patch_replication_callback
+from configs import celeba_config
 
-# The main training file. Config is a dictionary specifying the configuration
-# of this training run.
+
 def run(config):
-
   # Update the config dict as necessary
   # This is for convenience, to add settings derived from the user-specified
   # configuration into the config-dict (e.g. inferring the number of classes
@@ -48,7 +47,7 @@ def run(config):
     config['skip_init'] = True
   config = utils.update_config_roots(config)
   device = 'cuda'
-  
+
   # Seed RNG
   utils.seed_rng(config['seed'])
 
@@ -67,16 +66,16 @@ def run(config):
   # Next, build the model
   G = model.Generator(**config).to(device)
   D = model.Discriminator(**config).to(device)
-  
+
    # If using EMA, prepare it
   if config['ema']:
     print('Preparing EMA for G with decay of {}'.format(config['ema_decay']))
-    G_ema = model.Generator(**{**config, 'skip_init':True, 
+    G_ema = model.Generator(**{**config, 'skip_init':True,
                                'no_optim': True}).to(device)
     ema = utils.ema(G, G_ema, config['ema_decay'], config['ema_start'])
   else:
     G_ema, ema = None, None
-  
+
   # FP16?
   if config['G_fp16']:
     print('Casting G to float16...')
@@ -100,7 +99,7 @@ def run(config):
   if config['resume']:
     print('Loading weights...')
     utils.load_weights(G, D, state_dict,
-                       config['weights_root'], experiment_name, 
+                       config['weights_root'], experiment_name,
                        config['load_weights'] if config['load_weights'] else None,
                        G_ema if config['ema'] else None)
 
@@ -116,10 +115,10 @@ def run(config):
                                             experiment_name)
   train_metrics_fname = '%s/%s' % (config['logs_root'], experiment_name)
   print('Inception Metrics will be saved to {}'.format(test_metrics_fname))
-  test_log = utils.MetricsLogger(test_metrics_fname, 
+  test_log = utils.MetricsLogger(test_metrics_fname,
                                  reinitialize=(not config['resume']))
   print('Training Metrics will be saved to {}'.format(train_metrics_fname))
-  train_log = utils.MyLogger(train_metrics_fname, 
+  train_log = utils.MyLogger(train_metrics_fname,
                              reinitialize=(not config['resume']),
                              logstyle=config['logstyle'])
   # Write metadata
@@ -144,12 +143,12 @@ def run(config):
   # Prepare a fixed z & y to see individual sample evolution throghout training
   fixed_z, fixed_y = utils.prepare_z_y(G_batch_size, G.dim_z,
                                        config['n_classes'], device=device,
-                                       fp16=config['G_fp16'])  
+                                       fp16=config['G_fp16'])
   fixed_z.sample_()
   fixed_y.sample_()
   # Loaders are loaded, prepare the training function
   if config['which_train_fn'] == 'GAN':
-    train = train_fns.GAN_training_function(G, D, GD, z_, y_, 
+    train = train_fns.GAN_training_function(G, D, GD, z_, y_,
                                             ema, state_dict, config)
   # Else, assume debugging and use the dummy train fn
   else:
@@ -162,7 +161,7 @@ def run(config):
 
   print('Beginning training at epoch %d...' % state_dict['epoch'])
   # Train for specified number of epochs, although we mostly track G iterations.
-  for epoch in range(state_dict['epoch'], config['num_epochs']):    
+  for epoch in range(state_dict['epoch'], config['num_epochs']):
     # Which progressbar to use? TQDM or my own?
     if config['pbar'] == 'mine':
       pbar = utils.progress(loaders[0],displaytype='s1k' if config['use_multiepoch_sampler'] else 'eta')
@@ -183,15 +182,15 @@ def run(config):
         x, y = x.to(device), y.to(device)
       metrics = train(x, y)
       train_log.log(itr=int(state_dict['itr']), **metrics)
-      
+
       # Every sv_log_interval, log singular values
       if (config['sv_log_interval'] > 0) and (not (state_dict['itr'] % config['sv_log_interval'])):
-        train_log.log(itr=int(state_dict['itr']), 
+        train_log.log(itr=int(state_dict['itr']),
                       **{**utils.get_SVs(G, 'G'), **utils.get_SVs(D, 'D')})
 
       # If using my progbar, print metrics.
       if config['pbar'] == 'mine':
-          print(', '.join(['itr: %d' % state_dict['itr']] 
+          print(', '.join(['itr: %d' % state_dict['itr']]
                            + ['%s : %+4.3f' % (key, metrics[key])
                            for key in metrics]), end=' ')
 
@@ -202,7 +201,7 @@ def run(config):
           G.eval()
           if config['ema']:
             G_ema.eval()
-        train_fns.save_and_sample(G, D, G_ema, z_, y_, fixed_z, fixed_y, 
+        train_fns.save_and_sample(G, D, G_ema, z_, y_, fixed_z, fixed_y,
                                   state_dict, config, experiment_name)
 
       # Test every specified interval
@@ -217,11 +216,10 @@ def run(config):
 
 
 def main():
-  # parse command line and run
-  parser = utils.prepare_parser()
-  config = vars(parser.parse_args())
+  config = celeba_config
   print(config)
   run(config)
+
 
 if __name__ == '__main__':
   main()
