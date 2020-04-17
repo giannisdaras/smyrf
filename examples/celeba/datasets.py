@@ -28,7 +28,7 @@ class CelebAHQ(data.Dataset):
         dataset = self.data
         img_path = dataset[index]
         image = Image.open(img_path)
-        return self.transform_img(image), torch.tensor([0], dtype=torch.long)
+        return self.transform_img(image), torch.tensor(0, dtype=torch.long)
 
 
     def __len__(self):
