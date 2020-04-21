@@ -52,7 +52,7 @@ celeba_config = {
     'num_epochs': 500,
 
     ## Hardware specs
-    'device': 'cuda',
+    'device': 'cpu', # TPU POD will overwrite this
     'parallel': 'False',
 
     ## Others:

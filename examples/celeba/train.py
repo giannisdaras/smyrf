@@ -30,6 +30,10 @@ import train_fns
 from sync_batchnorm import patch_replication_callback
 from configs import celeba_config
 
+# xla imports
+import torch_xla.core.xla_model as xm
+import torch_xla.distributed.data_parallel as dp
+
 
 def run(config):
   # Update the config dict as necessary
@@ -46,7 +50,6 @@ def run(config):
     print('Skipping initialization for training resumption...')
     config['skip_init'] = True
   config = utils.update_config_roots(config)
-  device = 'cuda'
 
   # Seed RNG
   utils.seed_rng(config['seed'])
@@ -63,15 +66,18 @@ def run(config):
                        else utils.name_from_config(config))
   print('Experiment name is %s' % experiment_name)
 
+  devices = xm.get_xla_supported_devices()
+
   # Next, build the model
-  G = model.Generator(**config).to(device)
-  D = model.Discriminator(**config).to(device)
+  G = dp.DataParallel(model.Generator(**config), device_ids=devices)
+  D = dp.DataParallel(model.Discriminator(**config), device_ids=devices)
 
    # If using EMA, prepare it
   if config['ema']:
     print('Preparing EMA for G with decay of {}'.format(config['ema_decay']))
     G_ema = model.Generator(**{**config, 'skip_init':True,
-                               'no_optim': True}).to(device)
+                               'no_optim': True})
+    G_ema = dp.DataParallel(G_ema, device_ids=devices)
     ema = utils.ema(G, G_ema, config['ema_decay'], config['ema_start'])
   else:
     G_ema, ema = None, None
@@ -87,6 +93,7 @@ def run(config):
     D = D.half()
     # Consider automatically reducing SN_eps?
   GD = model.G_D(G, D)
+
   print(G)
   print(D)
   print('Number of params in G: {} D: {}'.format(
@@ -103,11 +110,6 @@ def run(config):
                        config['load_weights'] if config['load_weights'] else None,
                        G_ema if config['ema'] else None)
 
-  # If parallel, parallelize the GD module
-  if config['parallel']:
-    GD = nn.DataParallel(GD)
-    if config['cross_replica']:
-      patch_replication_callback(GD)
 
   # Prepare loggers for stats; metrics holds test metrics,
   # lmetrics holds any desired training metrics.

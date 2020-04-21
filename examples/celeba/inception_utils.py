@@ -23,6 +23,10 @@ from torchvision.models.inception import inception_v3
 import logging
 from tqdm import tqdm
 
+# xla imports
+import torch_xla.core.xla_model as xm
+import torch_xla.distributed.data_parallel as dp
+
 # Module that wraps the inception network to enable use with dataparallel and
 # returning pool features and logits.
 class WrapInception(nn.Module):
@@ -264,11 +268,14 @@ def accumulate_inception_activations(sample, net, num_inception_images=50000):
 
 # Load and wrap the Inception model
 def load_inception_net(parallel=False):
+  devices = xm.get_xla_supported_devices()
+
   inception_model = inception_v3(pretrained=True, transform_input=False)
-  inception_model = WrapInception(inception_model.eval()).cuda()
-  if parallel:
-    print('Parallelizing Inception module...')
-    inception_model = nn.DataParallel(inception_model)
+  inception_model = WrapInception(inception_model.eval()).to(device)
+
+  # move to TPU pod
+  inception_model = dp.DataParallel(inception_model, device_ids=devices)
+
   return inception_model
 
 
@@ -309,7 +316,12 @@ def prepare_inception_metrics(dataset, parallel, no_inception=True, no_fid=False
         mu, sigma = np.mean(pool.cpu().numpy(), axis=0), np.cov(pool.cpu().numpy(), rowvar=False)
       logging.log(logging.INFO, 'Covariances calculated, getting FID...')
       if use_torch:
-        FID = torch_calculate_frechet_distance(mu, sigma, torch.tensor(data_mu).float().cuda(), torch.tensor(data_sigma).float().cuda())
+        devices = xm.get_xla_supported_devices()
+        device = devices[-1]
+        FID = torch_calculate_frechet_distance(
+            mu, sigma, torch.tensor(data_mu).float().to(device),
+            torch.tensor(data_sigma).float().to(device))
+
         FID = float(FID.cpu().numpy())
       else:
         FID = numpy_calculate_frechet_distance(mu.cpu().numpy(), sigma.cpu().numpy(), data_mu, data_sigma)

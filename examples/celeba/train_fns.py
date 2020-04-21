@@ -148,7 +148,7 @@ def save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y,
                        experiment_name=experiment_name,
                        folder_number=state_dict['itr'],
                        sheet_number=0,
-                       fix_z=fix_z, fix_y=fix_y, device='cuda')
+                       fix_z=fix_z, fix_y=fix_y)
 
 
 

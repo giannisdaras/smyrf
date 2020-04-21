@@ -17,6 +17,9 @@ from tqdm import tqdm, trange
 from argparse import ArgumentParser
 from configs import celeba_config
 
+# xla imports
+import torch_xla.core.xla_model as xm
+import torch_xla.distributed.data_parallel as dp
 
 def run(config):
   # Get loader
@@ -26,7 +29,11 @@ def run(config):
   # Load inception net
   net = inception_utils.load_inception_net(parallel=config['parallel'])
   pool, logits, labels = [], [], []
-  device = 'cuda'
+
+  # move to TPU Pod
+  devices = xm.get_xla_supported_devices()
+  net = dp.DataParallel(net, device_ids=devices)
+
   for i, (x, y) in enumerate(tqdm(loader)):
     x = x.to(device)
     with torch.no_grad():
