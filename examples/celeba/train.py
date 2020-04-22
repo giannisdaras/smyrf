@@ -225,10 +225,9 @@ def run(config):
     pbar.close()
 
 def main(index):
-  config = celeba_config
-  xm.master_print(config)
-  run(config)
+  xm.master_print(celeba_config)
+  run(celeba_config)
 
 
 if __name__ == '__main__':
-  xmp.spawn(main, args=())
+  xmp.spawn(main, args=(), nprocs=celeba_config['num_devices'])
