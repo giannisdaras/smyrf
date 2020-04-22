@@ -22,10 +22,11 @@ from torch.nn import Parameter as P
 from torchvision.models.inception import inception_v3
 import logging
 from tqdm import tqdm
-
 # xla imports
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.data_parallel as dp
+
+logging.basicConfig(level=logging.INFO)
 
 def master_log(s):
     if xm.is_master_ordinal():
@@ -262,7 +263,7 @@ def accumulate_inception_activations(sample, net, num_inception_images=50000):
   # get batch size
   bs = sample()[0].shape[0]
 
-  while ((torch.cat(logits, 0).shape[0] if len(logits) else 0) * bs) < num_inception_images:
+  while ((torch.cat(logits, 0).shape[0] if len(logits) else 0)) < num_inception_images:
     with torch.no_grad():
       images, labels_val = sample()
       pool_val, logits_val = net(images.float())
@@ -272,7 +273,12 @@ def accumulate_inception_activations(sample, net, num_inception_images=50000):
         pbar.update(images.shape[0])
       # free memory
       del images, labels_val, pool_val, logits_val
-  return torch.cat(pool, 0), torch.cat(logits, 0)
+  if xm.is_master_ordinal():
+      pbar.close()
+  
+  pool_ = torch.cat(pool, 0)
+  logits_ = torch.cat(logits, 0)
+  return pool_, logits_
 
 
 
@@ -297,7 +303,6 @@ def prepare_inception_metrics(dataset, parallel, no_inception=True, no_fid=False
   dataset = dataset.strip('_hdf5')
   data_mu = np.load(dataset+'_inception_moments.npz')['mu']
   data_sigma = np.load(dataset+'_inception_moments.npz')['sigma']
-
   master_log('Loading inception net')
 
   # Load network
