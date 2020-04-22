@@ -27,6 +27,10 @@ from tqdm import tqdm
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.data_parallel as dp
 
+def master_log(s):
+    if xm.is_master_ordinal():
+        logging.log(logging.INFO, s)
+
 # Module that wraps the inception network to enable use with dataparallel and
 # returning pool features and logits.
 class WrapInception(nn.Module):
@@ -293,15 +297,16 @@ def prepare_inception_metrics(dataset, parallel, no_inception=True, no_fid=False
   dataset = dataset.strip('_hdf5')
   data_mu = np.load(dataset+'_inception_moments.npz')['mu']
   data_sigma = np.load(dataset+'_inception_moments.npz')['sigma']
-  logging.log(logging.INFO, 'Loading inception net')
+
+  master_log'Loading inception net')
+
   # Load network
   net = load_inception_net(parallel)
   def get_inception_metrics(sample, num_inception_images, num_splits=10,
                             use_torch=True):
-
-    logging.log(logging.INFO, 'Gathering activations...')
+    master_log('Gathering activations...')
     pool, logits = accumulate_inception_activations(sample, net, num_inception_images)
-    logging.log(logging.INFO, 'Calculating Inception Score...')
+    master_log('Calculating Inception Score...')
 
     if no_inception:
         IS_mean = 0.0
@@ -312,12 +317,12 @@ def prepare_inception_metrics(dataset, parallel, no_inception=True, no_fid=False
     if no_fid:
       FID = 9999.0
     else:
-      logging.log(logging.INFO, 'Calculating means and covariances...')
+      master_log('Calculating means and covariances...')
       if use_torch:
         mu, sigma = torch.mean(pool, 0), torch_cov(pool, rowvar=False)
       else:
         mu, sigma = np.mean(pool.cpu().numpy(), axis=0), np.cov(pool.cpu().numpy(), rowvar=False)
-      logging.log(logging.INFO, 'Covariances calculated, getting FID...')
+      master_log('Covariances calculated, getting FID...')
       if use_torch:
         device = xm.xla_device(devkind='TPU')
         FID = torch_calculate_frechet_distance(
