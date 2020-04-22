@@ -216,7 +216,7 @@ def run(config):
                                   state_dict, config, experiment_name)
 
       # Test every specified interval
-      if (not (state_dict['itr'] % config['test_every'])) and xm.is_master_ordinal():
+      if (not (state_dict['itr'] % config['test_every'])):
         if config['G_eval_mode']:
           xm.master_print('Switchin G to eval mode...')
           G.eval()
