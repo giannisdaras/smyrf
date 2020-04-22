@@ -254,18 +254,18 @@ def calculate_inception_score(pred, num_splits=10):
 # Loop and run the sampler and the net until it accumulates num_inception_images
 # activations. Return the pool, the logits, and the labels (if one wants
 # Inception Accuracy the labels of the generated class will be needed)
-def accumulate_inception_activations(sample, net, num_inception_images=50000):
+def accumulate_inception_activations(model_sample, net, num_inception_images=50000):
   pool, logits = [], []
   if xm.is_master_ordinal():
     pbar = tqdm(range(num_inception_images))
     pbar.set_description('Sampling...')
 
   # get batch size
-  bs = sample()[0].shape[0]
+  bs = model_sample()[0].shape[0]
 
   while ((torch.cat(logits, 0).shape[0] if len(logits) else 0)) < num_inception_images:
     with torch.no_grad():
-      images, labels_val = sample()
+      images, labels_val = model_sample()
       pool_val, logits_val = net(images.float())
       pool += [pool_val]
       logits += [F.softmax(logits_val, 1)]
@@ -307,10 +307,10 @@ def prepare_inception_metrics(dataset, parallel, no_inception=True, no_fid=False
 
   # Load network
   net = load_inception_net(parallel)
-  def get_inception_metrics(sample, num_inception_images, num_splits=10,
+  def get_inception_metrics(model_sample, num_inception_images, num_splits=10,
                             use_torch=True):
     master_log('Gathering activations...')
-    pool, logits = accumulate_inception_activations(sample, net, num_inception_images)
+    pool, logits = accumulate_inception_activations(model_sample, net, num_inception_images)
     master_log('Calculating Inception Score...')
 
     if no_inception:

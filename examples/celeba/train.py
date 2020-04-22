@@ -220,7 +220,8 @@ def run(config):
         if config['G_eval_mode']:
           xm.master_print('Switchin G to eval mode...')
           G.eval()
-        train_fns.test(G, D, G_ema, sample, state_dict, config, sample,
+        model_sample = lambda: G(sample())
+        train_fns.test(G, D, G_ema, sample, state_dict, config, model_sample,
                        get_inception_metrics, experiment_name, test_log)
 
       if state_dict['itr'] >= config['total_steps']:
