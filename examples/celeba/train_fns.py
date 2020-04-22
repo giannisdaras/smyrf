@@ -164,14 +164,14 @@ def save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y,
     are an improvement over the previous best (either in IS or FID,
     user-specified), logs the results, and saves a best_ copy if it's an
     improvement. '''
-def test(G, D, G_ema, sample_fn, state_dict, config, sample, get_inception_metrics,
+def test(G, D, G_ema, sample, state_dict, config, model_sample, get_inception_metrics,
          experiment_name, test_log):
   master_log('Gathering inception metrics...')
   if config['accumulate_stats']:
     utils.accumulate_standing_stats(G_ema if config['ema'] and config['use_ema'] else G,
-                           sample_fn, config['n_classes'],
+                           sample, config['n_classes'],
                            config['num_standing_accumulations'])
-  IS_mean, IS_std, FID = get_inception_metrics(sample,
+  IS_mean, IS_std, FID = get_inception_metrics(model_sample,
                                                config['num_inception_images'],
                                                num_splits=10)
   master_log('Itr %d: PYTORCH UNOFFICIAL Inception Score is %3.3f +/- %3.3f, PYTORCH UNOFFICIAL FID is %5.4f' % (state_dict['itr'], IS_mean, IS_std, FID))
