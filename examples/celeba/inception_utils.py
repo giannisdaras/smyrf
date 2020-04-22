@@ -318,20 +318,14 @@ def prepare_inception_metrics(dataset, parallel, no_inception=True, no_fid=False
       FID = 9999.0
     else:
       master_log('Calculating means and covariances...')
-      if use_torch:
-        mu, sigma = torch.mean(pool, 0), torch_cov(pool, rowvar=False)
-      else:
-        mu, sigma = np.mean(pool.cpu().numpy(), axis=0), np.cov(pool.cpu().numpy(), rowvar=False)
+      mu, sigma = torch.mean(pool, 0), torch_cov(pool, rowvar=False)
       master_log('Covariances calculated, getting FID...')
-      if use_torch:
-        device = xm.xla_device(devkind='TPU')
-        FID = torch_calculate_frechet_distance(
-            mu, sigma, torch.tensor(data_mu).float().to(device),
-            torch.tensor(data_sigma).float().to(device))
+      device = xm.xla_device(devkind='TPU')
+      FID = torch_calculate_frechet_distance(
+      mu, sigma, torch.tensor(data_mu).float().to(device),
+      torch.tensor(data_sigma).float().to(device))
+      FID = float(FID.cpu().numpy())
 
-        FID = float(FID.cpu().numpy())
-      else:
-        FID = numpy_calculate_frechet_distance(mu.cpu().numpy(), sigma.cpu().numpy(), data_mu, data_sigma)
     # Delete mu, sigma, pool, logits just in case
     del mu, sigma, pool, logits
     return IS_mean, IS_std, FID
