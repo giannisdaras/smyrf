@@ -126,21 +126,20 @@ def torch_cov(m, rowvar=False):
 
 # Pytorch implementation of matrix sqrt, from Tsung-Yu Lin, and Subhransu Maji
 # https://github.com/msubhransu/matrix-sqrt
-def sqrt_newton_schulz(A, numIters, dtype=None):
+def sqrt_newton_schulz(A, numIters):
   with torch.no_grad():
-    if dtype is None:
-      dtype = A.type()
-    batchSize = A.shape[0]
+    device = A.device
+    bs = A.shape[0]
     dim = A.shape[1]
     normA = A.mul(A).sum(dim=1).sum(dim=1).sqrt()
-    Y = A.div(normA.view(batchSize, 1, 1).expand_as(A));
-    I = torch.eye(dim,dim).view(1, dim, dim).repeat(batchSize,1,1).type(dtype)
-    Z = torch.eye(dim,dim).view(1, dim, dim).repeat(batchSize,1,1).type(dtype)
+    Y = A.div(normA.view(bs, 1, 1).expand_as(A));
+    I = torch.eye(dim, dim, dtype=torch.float, device=device).view(1, dim, dim).repeat(bs, 1, 1)
+    Z = torch.eye(dim, dim).view(1, dim, dim, dtype=torch.float, device=device).repeat(bs, 1, 1)
     for i in range(numIters):
       T = 0.5*(3.0*I - Z.bmm(Y))
       Y = Y.bmm(T)
       Z = T.bmm(Z)
-    sA = Y*torch.sqrt(normA).view(batchSize, 1, 1).expand_as(A)
+    sA = Y*torch.sqrt(normA).view(bs, 1, 1).expand_as(A)
   return sA
 
 
