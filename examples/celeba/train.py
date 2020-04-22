@@ -199,7 +199,7 @@ def run(config):
                       **{**utils.get_SVs(G, 'G'), **utils.get_SVs(D, 'D')})
 
       if xm.is_master_ordinal():
-          pbar.set_description(''.join(['itr: %d' % state_dict['itr']] + ['%s : %+4.3f' % (key, metrics[key]) for key in metrics])')
+          pbar.set_description(','.join(['itr: %d' % state_dict['itr']] + ['%s : %+4.3f' % (key, metrics[key]) for key in metrics]))
 
       # Save weights and copies as configured at specified interval
       if (not (state_dict['itr'] % config['save_every'])) and xm.is_master_ordinal():
