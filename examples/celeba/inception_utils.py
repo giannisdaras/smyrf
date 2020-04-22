@@ -254,7 +254,11 @@ def accumulate_inception_activations(sample, net, num_inception_images=50000):
   pool, logits = [], []
   pbar = tqdm(range(num_inception_images))
   pbar.set_description('Sampling...')
-  while (torch.cat(logits, 0).shape[0] if len(logits) else 0) < num_inception_images:
+
+  # get batch size
+  bs = sample()[0].shape[0]
+
+  while ((torch.cat(logits, 0).shape[0] if len(logits) else 0) * bs) < num_inception_images:
     with torch.no_grad():
       images, labels_val = sample()
       pool_val, logits_val = net(images.float())
@@ -264,6 +268,7 @@ def accumulate_inception_activations(sample, net, num_inception_images=50000):
       # free memory
       del images, labels_val, pool_val, logits_val
   return torch.cat(pool, 0), torch.cat(logits, 0)
+
 
 
 # Load and wrap the Inception model
