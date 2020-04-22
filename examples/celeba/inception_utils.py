@@ -134,7 +134,7 @@ def sqrt_newton_schulz(A, numIters):
     normA = A.mul(A).sum(dim=1).sum(dim=1).sqrt()
     Y = A.div(normA.view(bs, 1, 1).expand_as(A));
     I = torch.eye(dim, dim, dtype=torch.float, device=device).view(1, dim, dim).repeat(bs, 1, 1)
-    Z = torch.eye(dim, dim).view(1, dim, dim, dtype=torch.float, device=device).repeat(bs, 1, 1)
+    Z = torch.eye(dim, dim, dtype=torch.float, device=device).view(1, dim, dim).repeat(bs, 1, 1)
     for i in range(numIters):
       T = 0.5*(3.0*I - Z.bmm(Y))
       Y = Y.bmm(T)
