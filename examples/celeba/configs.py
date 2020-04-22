@@ -38,10 +38,10 @@ celeba_config = {
     'skip_init': True,
 
     ## Optimization
-    'batch_size': 512,
+    'batch_size': 64,
     'G_batch_size': 0,
-    'num_G_accumulations': 4,
-    'num_D_accumulations': 4,
+    'num_G_accumulations': 1,
+    'num_D_accumulations': 1,
     'num_D_steps': 1,
     'G_lr': 1e-4,
     'D_lr': 4e-4,
