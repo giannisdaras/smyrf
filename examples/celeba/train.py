@@ -192,7 +192,10 @@ def run(config):
         x, y = x.to(device), y.to(device)
 
       metrics = train(x, y)
-      train_log.log(itr=int(state_dict['itr']), **metrics)
+
+      if xm.is_master_ordinal():
+          # only master should log
+          train_log.log(itr=int(state_dict['itr']), **metrics)
 
       # Every sv_log_interval, log singular values
       if ((config['sv_log_interval'] > 0) and (not (state_dict['itr'] % config['sv_log_interval']))) and xm.is_master_ordinal():
