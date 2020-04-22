@@ -42,7 +42,7 @@ def run(config):
   def len_parallelloader(self):
         return len(self._loader._loader)
   pl.PerDeviceLoader.__len__ = len_parallelloader
-  
+
   # Update the config dict as necessary
   # This is for convenience, to add settings derived from the user-specified
   # configuration into the config-dict (e.g. inferring the number of classes
@@ -176,8 +176,9 @@ def run(config):
     pl_loader = pl.ParallelLoader(loader, [device]).per_device_loader(device)
 
     for i, (x, y) in enumerate(pl_loader):
-      # Increment the iteration counter
-      pbar.update(state_dict['itr'])
+      if xm.is_master_ordinal():
+          # Increment the iteration counter
+          pbar.update(state_dict['itr'])
       state_dict['itr'] += config['num_devices']
       # Make sure G and D are in training mode, just in case they got set to eval
       # For D, which typically doesn't have BN, this shouldn't matter much.
