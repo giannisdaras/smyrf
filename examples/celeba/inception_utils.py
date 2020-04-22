@@ -251,8 +251,9 @@ def calculate_inception_score(pred, num_splits=10):
 # Inception Accuracy the labels of the generated class will be needed)
 def accumulate_inception_activations(sample, net, num_inception_images=50000):
   pool, logits = [], []
-  pbar = tqdm(range(num_inception_images))
-  pbar.set_description('Sampling...')
+  if xm.is_master_ordinal():
+    pbar = tqdm(range(num_inception_images))
+    pbar.set_description('Sampling...')
 
   # get batch size
   bs = sample()[0].shape[0]
@@ -263,7 +264,8 @@ def accumulate_inception_activations(sample, net, num_inception_images=50000):
       pool_val, logits_val = net(images.float())
       pool += [pool_val]
       logits += [F.softmax(logits_val, 1)]
-      pbar.update(images.shape[0])
+      if xm.is_master_ordinal():
+        pbar.update(images.shape[0])
       # free memory
       del images, labels_val, pool_val, logits_val
   return torch.cat(pool, 0), torch.cat(logits, 0)
