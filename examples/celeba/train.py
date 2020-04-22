@@ -175,11 +175,12 @@ def run(config):
   xm.master_print('Beginning training at epoch %d...' % state_dict['epoch'])
   # Train for specified number of epochs, although we mostly track G iterations.
   for epoch in range(state_dict['epoch'], config['num_epochs']):
-    # Which progressbar to use? TQDM or my own?
-    if config['pbar'] == 'mine':
-      pbar = utils.progress(loader, displaytype='s1k' if config['use_multiepoch_sampler'] else 'eta')
-    else:
-      pbar = tqdm(loader)
+
+    if xm.is_master_ordinal():
+      if config['pbar'] == 'mine':
+        pbar = utils.progress(loader, displaytype='s1k' if config['use_multiepoch_sampler'] else 'eta')
+      else:
+        pbar = tqdm(loader)
 
 
     for i, (x, y) in enumerate(pbar):
