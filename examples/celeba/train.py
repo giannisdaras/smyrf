@@ -178,7 +178,7 @@ def run(config):
     for i, (x, y) in enumerate(pl_loader):
       if xm.is_master_ordinal():
           # Increment the iteration counter
-          pbar.update(state_dict['itr'])
+          pbar.update(config['num_devices'])
       state_dict['itr'] += config['num_devices']
       # Make sure G and D are in training mode, just in case they got set to eval
       # For D, which typically doesn't have BN, this shouldn't matter much.
