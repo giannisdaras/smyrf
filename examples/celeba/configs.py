@@ -53,6 +53,7 @@ celeba_config = {
 
     ## Hardware specs
     'device': 'cpu', # TPU POD will overwrite this
+    'num_devices': 8, # i.e a TPUv3-8 has 8 devices
     'parallel': 'False',
 
     ## Others:
