@@ -53,7 +53,7 @@ def run(config):
   config['D_activation'] = utils.activation_dict[config['D_nl']]
   # By default, skip init if resuming training.
   if config['resume']:
-    print('Skipping initialization for training resumption...')
+    xm.master_print('Skipping initialization for training resumption...')
     config['skip_init'] = True
   config = utils.update_config_roots(config)
 
@@ -70,7 +70,7 @@ def run(config):
   model = __import__(config['model'])
   experiment_name = (config['experiment_name'] if config['experiment_name']
                        else utils.name_from_config(config))
-  print('Experiment name is %s' % experiment_name)
+  xm.master_print('Experiment name is %s' % experiment_name)
 
   device = xm.xla_device(devkind='TPU')
 
@@ -80,7 +80,7 @@ def run(config):
 
    # If using EMA, prepare it
   if config['ema']:
-    print('Preparing EMA for G with decay of {}'.format(config['ema_decay']))
+    xm.master_print('Preparing EMA for G with decay of {}'.format(config['ema_decay']))
     G_ema = model.Generator(**{**config, 'skip_init':True,
                                'no_optim': True}).to(device)
     ema = utils.ema(G, G_ema, config['ema_decay'], config['ema_start'])
@@ -89,19 +89,19 @@ def run(config):
 
   # FP16?
   if config['G_fp16']:
-    print('Casting G to float16...')
+    xm.master_print('Casting G to float16...')
     G = G.half()
     if config['ema']:
       G_ema = G_ema.half()
   if config['D_fp16']:
-    print('Casting D to fp16...')
+    xm.master_print('Casting D to fp16...')
     D = D.half()
     # Consider automatically reducing SN_eps?
   GD = model.G_D(G, D)
 
-  print(G)
-  print(D)
-  print('Number of params in G: {} D: {}'.format(
+  xm.master_print(G)
+  xm.master_print(D)
+  xm.master_print('Number of params in G: {} D: {}'.format(
     *[sum([p.data.nelement() for p in net.parameters()]) for net in [G,D]]))
   # Prepare state dict, which holds things like epoch # and itr #
   state_dict = {'itr': 0, 'epoch': 0, 'save_num': 0, 'save_best_num': 0,
@@ -109,7 +109,7 @@ def run(config):
 
   # If loading from a pre-trained model, load weights
   if config['resume']:
-    print('Loading weights...')
+    xm.master_print('Loading weights...')
     utils.load_weights(G, D, state_dict,
                        config['weights_root'], experiment_name,
                        config['load_weights'] if config['load_weights'] else None,
@@ -121,10 +121,10 @@ def run(config):
   test_metrics_fname = '%s/%s_log.jsonl' % (config['logs_root'],
                                             experiment_name)
   train_metrics_fname = '%s/%s' % (config['logs_root'], experiment_name)
-  print('Test Metrics will be saved to {}'.format(test_metrics_fname))
+  xm.master_print('Test Metrics will be saved to {}'.format(test_metrics_fname))
   test_log = utils.MetricsLogger(test_metrics_fname,
                                  reinitialize=(not config['resume']))
-  print('Training Metrics will be saved to {}'.format(train_metrics_fname))
+  xm.master_print('Training Metrics will be saved to {}'.format(train_metrics_fname))
   train_log = utils.MyLogger(train_metrics_fname,
                              reinitialize=(not config['resume']),
                              logstyle=config['logstyle'])
@@ -136,13 +136,13 @@ def run(config):
   # a full D iteration (regardless of number of D steps and accumulations)
   D_batch_size = (config['batch_size'] * config['num_D_steps']
                   * config['num_D_accumulations'])
-  print('Preparing data...')
+  xm.master_print('Preparing data...')
   loader = utils.get_data_loaders(**{**config, 'batch_size': D_batch_size,
                                       'start_itr': state_dict['itr']})
   loader = pl.ParallelLoader(loader, [device]).per_device_loader(device)
-    
+
   # Prepare inception metrics: FID and IS
-  print('Preparing metrics...')
+  xm.master_print('Preparing metrics...')
   get_inception_metrics = inception_utils.prepare_inception_metrics(
       config['dataset'], config['parallel'],
       no_inception=config['no_inception'],
@@ -168,7 +168,7 @@ def run(config):
     train = train_fns.dummy_training_function()
 
 
-  print('Beginning training at epoch %d...' % state_dict['epoch'])
+  xm.master_print('Beginning training at epoch %d...' % state_dict['epoch'])
   # Train for specified number of epochs, although we mostly track G iterations.
   for epoch in range(state_dict['epoch'], config['num_epochs']):
     # Which progressbar to use? TQDM or my own?
@@ -199,16 +199,16 @@ def run(config):
         train_log.log(itr=int(state_dict['itr']),
                       **{**utils.get_SVs(G, 'G'), **utils.get_SVs(D, 'D')})
 
-      # If using my progbar, print metrics.
+      # If using my progbar, xm.master_print metrics.
       if config['pbar'] == 'mine':
-          print(', '.join(['itr: %d' % state_dict['itr']]
+          xm.master_print(', '.join(['itr: %d' % state_dict['itr']]
                            + ['%s : %+4.3f' % (key, metrics[key])
                            for key in metrics]), end=' ')
 
       # Save weights and copies as configured at specified interval
       if not (state_dict['itr'] % config['save_every']):
         if config['G_eval_mode']:
-          print('Switchin G to eval mode...')
+          xm.master_print('Switchin G to eval mode...')
           G.eval()
           if config['ema']:
             G_ema.eval()
@@ -218,7 +218,7 @@ def run(config):
       # Test every specified interval
       if not (state_dict['itr'] % config['test_every']):
         if config['G_eval_mode']:
-          print('Switchin G to eval mode...')
+          xm.master_print('Switchin G to eval mode...')
           G.eval()
         train_fns.test(G, D, G_ema, sample, state_dict, config, sample,
                        get_inception_metrics, experiment_name, test_log)
@@ -228,7 +228,7 @@ def run(config):
 
 def main(index):
   config = celeba_config
-  print(config)
+  xm.master_print(config)
   run(config)
 
 
