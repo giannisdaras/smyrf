@@ -841,11 +841,11 @@ def sample_sheet(G, classes_per_sheet, num_classes, samples_per_class, parallel,
   if not os.path.isdir('%s/%s/%d' % (samples_root, experiment_name, folder_number)):
     os.mkdir('%s/%s/%d' % (samples_root, experiment_name, folder_number))
 
-  devices = xm.get_xla_supported_devices()
+  device = xm.xla_device(devkind='TPU')
+
   # loop over total number of sheets
   for i in range(num_classes // classes_per_sheet):
     ims = []
-    device = devices[i % len(devices)]
     y = torch.arange(i * classes_per_sheet, (i + 1) * classes_per_sheet,
                      device=device)
     for j in range(samples_per_class):
@@ -872,8 +872,8 @@ def sample_sheet(G, classes_per_sheet, num_classes, samples_per_class, parallel,
 
 # Interp function; expects x0 and x1 to be of shape (shape0, 1, rest_of_shape..)
 def interp(x0, x1, num_midpoints):
-  devices = xm.get_xla_supported_devices()
-  lerp = torch.linspace(0, 1.0, num_midpoints + 2, device=devices[0]).to(x0.dtype)
+  device = xm.xla_device(devkind='TPU')
+  lerp = torch.linspace(0, 1.0, num_midpoints + 2, device=device).to(x0.dtype)
   return ((x0 * (1 - lerp.view(1, -1, 1))) + (x1 * lerp.view(1, -1, 1)))
 
 
@@ -883,8 +883,7 @@ def interp_sheet(G, num_per_sheet, num_midpoints, num_classes, parallel,
                  samples_root, experiment_name, folder_number, sheet_number=0,
                  fix_z=False, fix_y=False, device=None):
 
-  devices = xm.get_xla_supported_devices()
-  device = devices[0]
+  devices = xm.xla_device(devkind='TPU')
   # Prepare zs and ys
   if fix_z: # If fix Z, only sample 1 z per row
     zs = torch.randn(num_per_sheet, 1, G.dim_z, device=device)
@@ -1012,7 +1011,7 @@ def count_parameters(module):
 
 # Convenience function to sample an index, not actually a 1-hot
 def sample_1hot(batch_size, num_classes, device=None):
-  device = xm.get_xla_supported_devices()[0]
+  device = xm.xla_device(devkind='TPU')
   return torch.randint(low=0, high=num_classes, size=(batch_size,),
           device=device, dtype=torch.int64, requires_grad=False)
 
@@ -1054,9 +1053,7 @@ class Distribution(torch.Tensor):
 def prepare_z_y(G_batch_size, dim_z, nclasses, device=None,
                 fp16=False, z_var=1.0, target=None):
   # choose a random device
-  devices = xm.get_xla_supported_devices()
-  device_ind = random.randint(0, len(devices) - 1)
-  device = devices[device_ind]
+  device = xm.xla_device(devkind='TPU')
 
   dtype = torch.float16 if fp16 else torch.float32
   z = torch.empty((G_batch_size, dim_z),

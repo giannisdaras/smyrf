@@ -66,18 +66,17 @@ def run(config):
                        else utils.name_from_config(config))
   print('Experiment name is %s' % experiment_name)
 
-  devices = xm.get_xla_supported_devices()
+  device = xm.xla_device(devkind='TPU')
 
   # Next, build the model
-  G = dp.DataParallel(model.Generator(**config), device_ids=devices)
-  D = dp.DataParallel(model.Discriminator(**config), device_ids=devices)
+  G = model.Generator(**config).to(device)
+  D = model.Discriminator(**config).to(device)
 
    # If using EMA, prepare it
   if config['ema']:
     print('Preparing EMA for G with decay of {}'.format(config['ema_decay']))
     G_ema = model.Generator(**{**config, 'skip_init':True,
-                               'no_optim': True})
-    G_ema = dp.DataParallel(G_ema, device_ids=devices)
+                               'no_optim': True}).to(device)
     ema = utils.ema(G, G_ema, config['ema_decay'], config['ema_start'])
   else:
     G_ema, ema = None, None

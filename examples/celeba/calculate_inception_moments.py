@@ -30,9 +30,9 @@ def run(config):
   net = inception_utils.load_inception_net(parallel=config['parallel'])
   pool, logits, labels = [], [], []
 
-  # move to TPU Pod
-  devices = xm.get_xla_supported_devices()
-  net = dp.DataParallel(net, device_ids=devices)
+  # move to TPU
+  device = xm.xla_device(devkind='TPU')
+  net = net.to(device)
 
   for i, (x, y) in enumerate(tqdm(loader)):
     x = x.to(device)
