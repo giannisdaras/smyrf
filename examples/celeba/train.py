@@ -128,8 +128,11 @@ def run(config):
   train_log = utils.MyLogger(train_metrics_fname,
                              reinitialize=(not config['resume']),
                              logstyle=config['logstyle'])
-  # Write metadata
-  utils.write_metadata(config['logs_root'], experiment_name, config, state_dict)
+
+  if xm.is_master_ordinal():
+      # Write metadata
+      utils.write_metadata(config['logs_root'], experiment_name, config, state_dict)
+
   # Prepare data; the Discriminator's batch size is all that needs to be passed
   # to the dataloader, as G doesn't require dataloading.
   # Note that at every loader iteration we pass in enough data to complete
@@ -143,6 +146,7 @@ def run(config):
 
   # Prepare inception metrics: FID and IS
   xm.master_print('Preparing metrics...')
+
   get_inception_metrics = inception_utils.prepare_inception_metrics(
       config['dataset'], config['parallel'],
       no_inception=config['no_inception'],
@@ -191,11 +195,12 @@ def run(config):
         x, y = x.to(device).half(), y.to(device)
       else:
         x, y = x.to(device), y.to(device)
+
       metrics = train(x, y)
       train_log.log(itr=int(state_dict['itr']), **metrics)
 
       # Every sv_log_interval, log singular values
-      if (config['sv_log_interval'] > 0) and (not (state_dict['itr'] % config['sv_log_interval'])):
+      if ((config['sv_log_interval'] > 0) and (not (state_dict['itr'] % config['sv_log_interval']))) and xm.is_master_ordinal():
         train_log.log(itr=int(state_dict['itr']),
                       **{**utils.get_SVs(G, 'G'), **utils.get_SVs(D, 'D')})
 
@@ -206,7 +211,7 @@ def run(config):
                            for key in metrics]))
 
       # Save weights and copies as configured at specified interval
-      if not (state_dict['itr'] % config['save_every']):
+      if (not (state_dict['itr'] % config['save_every'])) and xm.is_master_ordinal():
         if config['G_eval_mode']:
           xm.master_print('Switchin G to eval mode...')
           G.eval()
@@ -222,6 +227,7 @@ def run(config):
           G.eval()
         train_fns.test(G, D, G_ema, sample, state_dict, config, sample,
                        get_inception_metrics, experiment_name, test_log)
+
     # Increment epoch counter at end of epoch
     state_dict['epoch'] += 1
 
