@@ -58,6 +58,9 @@ def run(config):
     config['skip_init'] = True
   config = utils.update_config_roots(config)
 
+  assert config['save_every'] % config['num_devices'] == 0
+  assert config['test_every'] % config['num_devices'] == 0
+
   # Seed RNG
   utils.seed_rng(config['seed'])
 
@@ -104,8 +107,8 @@ def run(config):
   xm.master_print(D)
   xm.master_print('Number of params in G: {} D: {}'.format(
     *[sum([p.data.nelement() for p in net.parameters()]) for net in [G,D]]))
-  # Prepare state dict, which holds things like epoch # and itr #
-  state_dict = {'itr': 0, 'epoch': 0, 'save_num': 0, 'save_best_num': 0,
+  # Prepare state dict, which holds things like itr #
+  state_dict = {'itr': 0, 'save_num': 0, 'save_best_num': 0,
                 'best_IS': 0, 'best_FID': 999999, 'config': config}
 
   # If loading from a pre-trained model, load weights
@@ -163,30 +166,18 @@ def run(config):
   # Prepare a fixed z & y to see individual sample evolution throghout training
   fixed_z, fixed_y = sample()
 
-  # Loader is loaded, prepare the training function
-  if config['which_train_fn'] == 'GAN':
-    train = train_fns.GAN_training_function(G, D, GD, sample, ema, state_dict,
-                                            config)
-  # Else, assume debugging and use the dummy train fn
-  else:
-    train = train_fns.dummy_training_function()
+  train = train_fns.GAN_training_function(G, D, GD, sample, ema, state_dict,
+                                          config)
 
+  xm.master_print('Beginning training...')
 
-  xm.master_print('Beginning training at epoch %d...' % state_dict['epoch'])
-
-  # each device runs through all dataset, so we should adjust the number of epochs
-  config['num_epochs'] = config['num_epochs'] // config['num_devices']
-  
-  for epoch in range(state_dict['epoch'], config['num_epochs']):
+  pbar = tqdm(total=config['total_steps'])
+  while (state_dict['itr'] < config['total_steps']):
     pl_loader = pl.ParallelLoader(loader, [device]).per_device_loader(device)
-    if config['pbar'] == 'mine':
-      pbar = utils.progress(pl_loader, displaytype='s1k' if config['use_multiepoch_sampler'] else 'eta')
-    else:
-      pbar = tqdm(pl_loader)
 
-
-    for i, (x, y) in enumerate(pbar if xm.is_master_ordinal() else pl_loader):
+    for i, (x, y) in enumerate(pl_loader):
       # Increment the iteration counter
+      pbar.update(state_dict['itr'])
       state_dict['itr'] += config['num_devices']
       # Make sure G and D are in training mode, just in case they got set to eval
       # For D, which typically doesn't have BN, this shouldn't matter much.
@@ -207,11 +198,8 @@ def run(config):
         train_log.log(itr=int(state_dict['itr']),
                       **{**utils.get_SVs(G, 'G'), **utils.get_SVs(D, 'D')})
 
-      # If using my progbar, xm.master_print metrics.
-      if config['pbar'] == 'mine':
-          xm.master_print(', '.join(['itr: %d' % state_dict['itr']]
-                           + ['%s : %+4.3f' % (key, metrics[key])
-                           for key in metrics]))
+      if xm.is_master_ordinal():
+          pbar.set_description(''.join(['itr: %d' % state_dict['itr']] + ['%s : %+4.3f' % (key, metrics[key]) for key in metrics])')
 
       # Save weights and copies as configured at specified interval
       if (not (state_dict['itr'] % config['save_every'])) and xm.is_master_ordinal():
@@ -231,9 +219,9 @@ def run(config):
         train_fns.test(G, D, G_ema, sample, state_dict, config, sample,
                        get_inception_metrics, experiment_name, test_log)
 
-    # Increment epoch counter at end of epoch
-    state_dict['epoch'] += 1
-
+      if state_dict['itr'] >= config['total_steps']:
+          break
+    pbar.close()
 
 def main(index):
   config = celeba_config

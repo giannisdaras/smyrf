@@ -49,7 +49,7 @@ celeba_config = {
     'D_B1': 0.,
     'G_B2': 0.999,
     'D_B2': 0.999,
-    'num_epochs': 500,
+    'total_steps': 999999
 
     ## Hardware specs
     'device': 'cpu', # TPU POD will overwrite this
