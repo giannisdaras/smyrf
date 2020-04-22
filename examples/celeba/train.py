@@ -33,9 +33,15 @@ from configs import celeba_config
 # xla imports
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.data_parallel as dp
+import torch_xla.debug.metrics as met
+import torch_xla.distributed.xla_multiprocessing as xmp
+import torch_xla.distributed.parallel_loader as pl
 
 
 def run(config):
+  def len_parallelloader(self):
+        return len(self._loader._loader)
+  pl.PerDeviceLoader.__len__ = len_parallelloader
   # Update the config dict as necessary
   # This is for convenience, to add settings derived from the user-specified
   # configuration into the config-dict (e.g. inferring the number of classes
@@ -130,10 +136,13 @@ def run(config):
   # a full D iteration (regardless of number of D steps and accumulations)
   D_batch_size = (config['batch_size'] * config['num_D_steps']
                   * config['num_D_accumulations'])
+  print('Preparing data...')
   loader = utils.get_data_loaders(**{**config, 'batch_size': D_batch_size,
                                       'start_itr': state_dict['itr']})
-
+  loader = pl.ParallelLoader(loader, [device]).per_device_loader(device)
+    
   # Prepare inception metrics: FID and IS
+  print('Preparing metrics...')
   get_inception_metrics = inception_utils.prepare_inception_metrics(
       config['dataset'], config['parallel'],
       no_inception=config['no_inception'],
@@ -217,11 +226,11 @@ def run(config):
     state_dict['epoch'] += 1
 
 
-def main():
+def main(index):
   config = celeba_config
   print(config)
   run(config)
 
 
 if __name__ == '__main__':
-  main()
+  xmp.spawn(main, args=())
