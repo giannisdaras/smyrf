@@ -524,6 +524,7 @@ def get_data_loaders(dataset, data_root=None, augment=False, batch_size=64,
   image_size = imsize_dict[dataset]
   print('Data will not be augmented...')
   train_transform = transforms.Compose([
+                      transforms.Resize(image_size),
                      transforms.ToTensor(),
                      transforms.Normalize(norm_mean, norm_std)])
 
