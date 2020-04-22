@@ -175,15 +175,13 @@ def run(config):
   xm.master_print('Beginning training at epoch %d...' % state_dict['epoch'])
   # Train for specified number of epochs, although we mostly track G iterations.
   for epoch in range(state_dict['epoch'], config['num_epochs']):
-
-    if xm.is_master_ordinal():
-      if config['pbar'] == 'mine':
-        pbar = utils.progress(loader, displaytype='s1k' if config['use_multiepoch_sampler'] else 'eta')
-      else:
-        pbar = tqdm(loader)
+    if config['pbar'] == 'mine':
+      pbar = utils.progress(loader, displaytype='s1k' if config['use_multiepoch_sampler'] else 'eta')
+    else:
+      pbar = tqdm(loader)
 
 
-    for i, (x, y) in enumerate(pbar):
+    for i, (x, y) in enumerate(pbar if xm.is_master_ordinal() else loader):
       # Increment the iteration counter
       state_dict['itr'] += 1
       # Make sure G and D are in training mode, just in case they got set to eval
