@@ -10,6 +10,9 @@ import utils
 import losses
 
 import torch_xla.core.xla_model as xm
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 def master_log(s):
     if xm.is_master_ordinal():
