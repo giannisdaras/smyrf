@@ -880,6 +880,11 @@ def interp(x0, x1, num_midpoints):
 def interp_sheet(G, num_per_sheet, num_midpoints, num_classes, parallel,
                  samples_root, experiment_name, folder_number, sheet_number=0,
                  fix_z=False, fix_y=False, device=None):
+  # Prepare sample directory
+  if not os.path.isdir('%s/%s' % (samples_root, experiment_name)):
+    os.mkdir('%s/%s' % (samples_root, experiment_name))
+  if not os.path.isdir('%s/%s/%d' % (samples_root, experiment_name, folder_number)):
+    os.mkdir('%s/%s/%d' % (samples_root, experiment_name, folder_number))
 
   device = xm.xla_device(devkind='TPU')
   # Prepare zs and ys
