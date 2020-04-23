@@ -206,21 +206,23 @@ def run(config):
           pbar.set_description(','.join(['itr: %d' % state_dict['itr']] + ['%s : %+4.3f' % (key, metrics[key]) for key in metrics]))
 
       # Save weights and copies as configured at specified interval
-      if (not (state_dict['itr'] % config['save_every'])) and xm.is_master_ordinal():
+      if (not (state_dict['itr'] % config['save_every'])):
         if config['G_eval_mode']:
           xm.master_print('Switchin G to eval mode...')
           G.eval()
           if config['ema']:
             G_ema.eval()
-        train_fns.save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y,
-                                  state_dict, config, experiment_name)
-
+        train_fns.save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y, state_dict, config, experiment_name)
+      
       # Test every specified interval
       if (not (state_dict['itr'] % config['test_every'])):
         if config['G_eval_mode']:
           xm.master_print('Switchin G to eval mode...')
           G.eval()
-        model_sample = lambda: G(sample())
+        def model_sample():
+            z, y = sample()
+            return G(z, G.shared(y))
+        
         train_fns.test(G, D, G_ema, sample, state_dict, config, model_sample,
                        get_inception_metrics, experiment_name, test_log)
 
