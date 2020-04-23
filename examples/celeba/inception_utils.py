@@ -261,23 +261,27 @@ def accumulate_inception_activations(model_sample, net, num_inception_images=500
     pbar.set_description('Sampling...')
 
   # get batch size
-  bs = model_sample()[0].shape[0]
+  bs = model_sample().shape[0]
 
   while ((torch.cat(logits, 0).shape[0] if len(logits) else 0)) < num_inception_images:
     with torch.no_grad():
-      images, labels_val = model_sample()
+      images = model_sample()
+      device = images.device
       pool_val, logits_val = net(images.float())
       pool += [pool_val]
       logits += [F.softmax(logits_val, 1)]
       if xm.is_master_ordinal():
         pbar.update(images.shape[0])
+      
       # free memory
-      del images, labels_val, pool_val, logits_val
+      del images, pool_val, logits_val
+  
   if xm.is_master_ordinal():
       pbar.close()
   
   pool_ = torch.cat(pool, 0)
   logits_ = torch.cat(logits, 0)
+  
   return pool_, logits_
 
 
@@ -311,12 +315,12 @@ def prepare_inception_metrics(dataset, parallel, no_inception=True, no_fid=False
                             use_torch=True):
     master_log('Gathering activations...')
     pool, logits = accumulate_inception_activations(model_sample, net, num_inception_images)
-    master_log('Calculating Inception Score...')
 
     if no_inception:
         IS_mean = 0.0
         IS_std = 0.0
     else:
+        master_log('Calculating Inception Score...')
         IS_mean, IS_std = calculate_inception_score(logits.cpu().numpy(), num_splits)
 
     if no_fid:
@@ -325,11 +329,10 @@ def prepare_inception_metrics(dataset, parallel, no_inception=True, no_fid=False
       master_log('Calculating means and covariances...')
       mu, sigma = torch.mean(pool, 0), torch_cov(pool, rowvar=False)
       master_log('Covariances calculated, getting FID...')
-      device = xm.xla_device(devkind='TPU')
-      FID = torch_calculate_frechet_distance(
-      mu, sigma, torch.tensor(data_mu).float().to(device),
-      torch.tensor(data_sigma).float().to(device))
+      FID = 9999.0
+      FID = torch_calculate_frechet_distance(mu.cpu(), sigma.cpu(), torch.tensor(data_mu).cpu(), torch.tensor(data_sigma).cpu())
       FID = float(FID.cpu().numpy())
+      master_log('Calculated FID')
 
     # Delete mu, sigma, pool, logits just in case
     del mu, sigma, pool, logits
