@@ -650,12 +650,12 @@ def save_weights(G, D, state_dict, weights_root, experiment_name,
   if xm.is_master_ordinal():
     if not os.path.exists(root):
         os.mkdir(root)
-  
+
   if name_suffix:
     xm.master_print('Saving weights to %s/%s...' % (root, name_suffix))
   else:
     xm.master_print('Saving weights to %s...' % root)
-   
+
   xm.save(G.state_dict(),
               '%s/%s.pth' % (root, join_strings('_', ['G', name_suffix])))
   xm.save(G.optim.state_dict(),
@@ -871,8 +871,7 @@ def sample_sheet(G, classes_per_sheet, num_classes, samples_per_class, parallel,
 
 # Interp function; expects x0 and x1 to be of shape (shape0, 1, rest_of_shape..)
 def interp(x0, x1, num_midpoints):
-  device = xm.xla_device(devkind='TPU')
-  lerp = torch.linspace(0, 1.0, num_midpoints + 2, device=device).to(x0.dtype)
+  lerp = torch.linspace(0, 1.0, num_midpoints + 2, device=x0.device)
   return ((x0 * (1 - lerp.view(1, -1, 1))) + (x1 * lerp.view(1, -1, 1)))
 
 
@@ -882,7 +881,7 @@ def interp_sheet(G, num_per_sheet, num_midpoints, num_classes, parallel,
                  samples_root, experiment_name, folder_number, sheet_number=0,
                  fix_z=False, fix_y=False, device=None):
 
-  devices = xm.xla_device(devkind='TPU')
+  devices = G.device
   # Prepare zs and ys
   if fix_z: # If fix Z, only sample 1 z per row
     zs = torch.randn(num_per_sheet, 1, G.dim_z, device=device)
