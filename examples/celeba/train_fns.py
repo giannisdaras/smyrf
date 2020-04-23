@@ -125,9 +125,6 @@ def save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y,
 
   # Save a random sample sheet with fixed z and y
   with torch.no_grad():
-    if config['parallel']:
-      fixed_Gz =  nn.parallel.data_parallel(which_G, (fixed_z, which_G.shared(fixed_y)))
-    else:
       fixed_Gz = which_G(fixed_z, which_G.shared(fixed_y))
   if not os.path.isdir('%s/%s' % (config['samples_root'], experiment_name)):
     os.mkdir('%s/%s' % (config['samples_root'], experiment_name))
