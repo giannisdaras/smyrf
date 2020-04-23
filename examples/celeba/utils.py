@@ -881,7 +881,7 @@ def interp_sheet(G, num_per_sheet, num_midpoints, num_classes, parallel,
                  samples_root, experiment_name, folder_number, sheet_number=0,
                  fix_z=False, fix_y=False, device=None):
 
-  devices = G.device
+  device = xm.xla_device(devkind='TPU')
   # Prepare zs and ys
   if fix_z: # If fix Z, only sample 1 z per row
     zs = torch.randn(num_per_sheet, 1, G.dim_z, device=device)
