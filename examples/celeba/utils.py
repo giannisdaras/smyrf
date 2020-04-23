@@ -647,24 +647,28 @@ def join_strings(base_string, strings):
 def save_weights(G, D, state_dict, weights_root, experiment_name,
                  name_suffix=None, G_ema=None):
   root = '/'.join([weights_root, experiment_name])
-  if not os.path.exists(root):
-    os.mkdir(root)
+  if xm.is_master_ordinal():
+    if not os.path.exists(root):
+        os.mkdir(root)
+  
   if name_suffix:
-    print('Saving weights to %s/%s...' % (root, name_suffix))
+    xm.master_print('Saving weights to %s/%s...' % (root, name_suffix))
   else:
-    print('Saving weights to %s...' % root)
-  torch.save(G.state_dict(),
+    xm.master_print('Saving weights to %s...' % root)
+   
+  xm.save(G.state_dict(),
               '%s/%s.pth' % (root, join_strings('_', ['G', name_suffix])))
-  torch.save(G.optim.state_dict(),
-              '%s/%s.pth' % (root, join_strings('_', ['G_optim', name_suffix])))
-  torch.save(D.state_dict(),
-              '%s/%s.pth' % (root, join_strings('_', ['D', name_suffix])))
-  torch.save(D.optim.state_dict(),
-              '%s/%s.pth' % (root, join_strings('_', ['D_optim', name_suffix])))
-  torch.save(state_dict,
-              '%s/%s.pth' % (root, join_strings('_', ['state_dict', name_suffix])))
+  xm.save(G.optim.state_dict(),
+            '%s/%s.pth' % (root, join_strings('_', ['G_optim', name_suffix])))
+  xm.save(D.state_dict(),
+           '%s/%s.pth' % (root, join_strings('_', ['D', name_suffix])))
+  xm.save(D.optim.state_dict(),
+               '%s/%s.pth' % (root, join_strings('_', ['D_optim', name_suffix])))
+  xm.save(state_dict,
+               '%s/%s.pth' % (root, join_strings('_', ['state_dict', name_suffix])))
+
   if G_ema is not None:
-    torch.save(G_ema.state_dict(),
+    xm.save(G_ema.state_dict(),
                 '%s/%s.pth' % (root, join_strings('_', ['G_ema', name_suffix])))
 
 
