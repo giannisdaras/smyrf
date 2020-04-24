@@ -115,10 +115,10 @@ celeba_config = {
     ## LSH
     'r': 4,
     # Checkpointing and testing
-    'num_inception_images': 10000,
-    'test_every': 5000,
-    'save_every': 2000,
-    'num_save_copies': 2,
+    'num_inception_images': 1000,
+    'test_every': 1000000,
+    'save_every': 3000,
+    'num_save_copies': 0,
     'num_best_copies': 5,
     'which_best': 'FID',
     'no_fid': False,
@@ -130,6 +130,6 @@ celeba_config = {
     'data_root': 'CelebAMask-HQ/CelebA-HQ-img',
     'logs_root': 'logs/',
     'samples_root': 'samples/',
-    'experiment_name': 'celeba1024',
+    'experiment_name': 'celeba128',
     'hash_name': False,
 }

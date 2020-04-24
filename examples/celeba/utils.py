@@ -409,7 +409,7 @@ def add_sample_parser(parser):
 # Convenience dicts
 dset_dict = {'celeba': dset.CelebAHQ}
 
-imsize_dict = {'celeba': 1024}
+imsize_dict = {'celeba': 128}
 
 nclass_dict = {'celeba': 1}
 
@@ -838,10 +838,11 @@ def sample(G, z_, y_, config):
 def sample_sheet(G, classes_per_sheet, num_classes, samples_per_class, parallel,
                  samples_root, experiment_name, folder_number, z_=None):
   # Prepare sample directory
-  if not os.path.isdir('%s/%s' % (samples_root, experiment_name)):
-    os.mkdir('%s/%s' % (samples_root, experiment_name))
-  if not os.path.isdir('%s/%s/%d' % (samples_root, experiment_name, folder_number)):
-    os.mkdir('%s/%s/%d' % (samples_root, experiment_name, folder_number))
+  if xm.is_master_ordinal():
+    if not os.path.isdir('%s/%s' % (samples_root, experiment_name)):
+      os.mkdir('%s/%s' % (samples_root, experiment_name))
+    if not os.path.isdir('%s/%s/%d' % (samples_root, experiment_name, folder_number)):
+      os.mkdir('%s/%s/%d' % (samples_root, experiment_name, folder_number))
 
   device = xm.xla_device(devkind='TPU')
 
@@ -879,10 +880,11 @@ def interp_sheet(G, num_per_sheet, num_midpoints, num_classes, parallel,
                  samples_root, experiment_name, folder_number, sheet_number=0,
                  fix_z=False, fix_y=False, device=None):
   # Prepare sample directory
-  if not os.path.isdir('%s/%s' % (samples_root, experiment_name)):
-    os.mkdir('%s/%s' % (samples_root, experiment_name))
-  if not os.path.isdir('%s/%s/%d' % (samples_root, experiment_name, folder_number)):
-    os.mkdir('%s/%s/%d' % (samples_root, experiment_name, folder_number))
+  if xm.is_master_ordinal():
+    if not os.path.isdir('%s/%s' % (samples_root, experiment_name)):
+      os.mkdir('%s/%s' % (samples_root, experiment_name))
+    if not os.path.isdir('%s/%s/%d' % (samples_root, experiment_name, folder_number)):
+      os.mkdir('%s/%s/%d' % (samples_root, experiment_name, folder_number))
 
   device = xm.xla_device(devkind='TPU')
   # Prepare zs and ys
