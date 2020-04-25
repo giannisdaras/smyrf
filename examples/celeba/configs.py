@@ -4,7 +4,7 @@ celeba_config = {
     'augment': False,
     'num_workers': 8,
     'no_pin_memory': True,
-    'shuffle': True,
+    'shuffle': False,
     'load_in_mem': False,
     'use_multiepoch_sampler': False,
 
@@ -12,15 +12,15 @@ celeba_config = {
     'model': 'BigGAN',
     'G_param': 'SN',
     'D_param': 'SN',
-    'G_ch': 96,
-    'D_ch': 96,
+    'G_ch': 64,
+    'D_ch': 64,
     'G_depth': 1,
     'D_depth': 1,
     'D_thin': True,
     'D_wide': True,
     'G_shared': True,
     'shared_dim': 128,
-    'dim_z': 120,
+    'dim_z': 128,
     'z_var': 1.0,
     'hier': True,
     'cross_replica': False,
@@ -35,7 +35,7 @@ celeba_config = {
     'seed': 0,
     'G_init': 'ortho',
     'D_init': 'ortho',
-    'skip_init': True,
+    'skip_init': False,
 
     ## Optimization
     'batch_size': 64,
@@ -59,7 +59,7 @@ celeba_config = {
     ## Others:
     'split_D': False,
     'config_from_name': False,
-    'G_eval_mode': False,
+    'G_eval_mode': True,
     'D_eval_mode': False,
 
     # Precision
@@ -117,11 +117,11 @@ celeba_config = {
     # Checkpointing and testing
     'num_inception_images': 1000,
     'test_every': 1000000,
-    'save_every': 3000,
+    'save_every': 5000,
     'num_save_copies': 0,
     'num_best_copies': 5,
     'which_best': 'FID',
-    'no_fid': False,
+    'no_fid': True,
     'no_inception': True, # there is no meaning in getting Inception score in Celeba
     'resume': False,
     'load_weights': '',
