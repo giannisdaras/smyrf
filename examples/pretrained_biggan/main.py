@@ -6,6 +6,8 @@ import utils
 import inception_utils
 from categories import indx2category
 import torch
+from tqdm import tqdm
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--weights_root', default='/home/giannis/image2noise/image2noise/biggan_noise/')
@@ -25,8 +27,9 @@ parser.add_argument('--progress', default=False, action='store_true',
 ## LSH
 parser.add_argument('--r', default=1, type=float)
 
-parser.add_argument('--imagenet_category', default='maltese')
+parser.add_argument('--imagenet_category', default=None)
 parser.add_argument('--do_sample', default=False, action='store_true')
+parser.add_argument('--sample_iters', default=1, type=int)
 parser.add_argument('--do_metrics', default=False, action='store_true')
 parser.add_argument('--disable_smyrf', action='store_true', default=False)
 
@@ -164,13 +167,18 @@ if __name__ == '__main__':
 
     # Random sampling
     category2indx = {val: key for key, val in indx2category.items()}
-    category = category2indx[args.imagenet_category]
+    if args.imagenet_category is not None:
+        category = category2indx[args.imagenet_category]
+    else:
+        category = None
 
     if args.do_sample:
-        generator_inputs = biggan.get_random_inputs(bs=args.bs,
-                                                    target=category,
-                                                    seed=args.seed)
-        out, _ = biggan.sample(generator_inputs, out_path='./samples.png')
+        for i in tqdm(range(args.sample_iters)):
+            generator_inputs = biggan.get_random_inputs(bs=args.bs,
+                                                        target=category,
+                                                        seed=args.seed)
+            out, _ = biggan.sample(generator_inputs, out_path='./samples.png')
+            del generator_inputs, out, _
 
     if args.do_metrics:
         logging.log(logging.INFO, 'Preparing random sample sheet...')
