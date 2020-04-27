@@ -169,6 +169,12 @@ def run(config):
   train = train_fns.GAN_training_function(G, D, GD, sample, ema, state_dict,
                                           config)
 
+  def G_sample():
+      z, y = sample()
+      which_G = G_ema if config['ema'] and config['use_ema'] else G
+      return which_G(z, which_G.shared(y))
+
+  model_sample = functools.partial(G_sample)
   xm.master_print('Beginning training...')
 
   pbar = tqdm(total=config['total_steps'])
@@ -213,16 +219,13 @@ def run(config):
           if config['ema']:
             G_ema.eval()
         train_fns.save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y, state_dict, config, experiment_name)
-      
+
       # Test every specified interval
       if (not (state_dict['itr'] % config['test_every'])):
         if config['G_eval_mode']:
           xm.master_print('Switchin G to eval mode...')
           G.eval()
-        def model_sample():
-            z, y = sample()
-            return G(z, G.shared(y))
-        
+
         train_fns.test(G, D, G_ema, sample, state_dict, config, model_sample,
                        get_inception_metrics, experiment_name, test_log)
 
