@@ -503,7 +503,7 @@ class MultiEpochSampler(torch.utils.data.Sampler):
       # return iter(torch.randint(high=n, size=(self.num_samples,), dtype=torch.int64).tolist())
     # return iter(.tolist())
     output = torch.cat(out).tolist()
-    print('Length dataset output is %d' % len(output))
+    xm.master_print('Length dataset output is %d' % len(output))
     return iter(output)
 
   def __len__(self):
@@ -522,7 +522,7 @@ def get_data_loaders(dataset, data_root=None, augment=False, batch_size=64,
   norm_mean = [0.5,0.5,0.5]
   norm_std = [0.5,0.5,0.5]
   image_size = imsize_dict[dataset]
-  print('Data will not be augmented...')
+  xm.master_print('Data will not be augmented...')
   train_transform = transforms.Compose([
                       transforms.Resize(image_size),
                      transforms.ToTensor(),
@@ -531,7 +531,7 @@ def get_data_loaders(dataset, data_root=None, augment=False, batch_size=64,
   train_set = which_dataset(data_root, train_transform)
 
   if use_multiepoch_sampler:
-    print('Using multiepoch sampler from start_itr %d...' % start_itr)
+    xm.master_print('Using multiepoch sampler from start_itr %d...' % start_itr)
     loader_kwargs = {'num_workers': num_workers, 'pin_memory': pin_memory}
     sampler = MultiEpochSampler(train_set, num_epochs, start_itr, batch_size)
     train_loader = DataLoader(train_set, batch_size=batch_size,
@@ -554,7 +554,7 @@ def seed_rng(seed):
 # If a base root folder is provided, peg all other root folders to it.
 def update_config_roots(config):
   if config['base_root']:
-    print('Pegging all root folders to base root %s' % config['base_root'])
+    xm.master_print('Pegging all root folders to base root %s' % config['base_root'])
     for key in ['data', 'weights', 'logs', 'samples']:
       config['%s_root' % key] = '%s/%s' % (config['base_root'], key)
   return config
@@ -564,7 +564,7 @@ def update_config_roots(config):
 def prepare_root(config):
   for key in ['weights_root', 'logs_root', 'samples_root']:
     if not os.path.exists(config[key]):
-      print('Making directory %s for %s...' % (config[key], key))
+      xm.master_print('Making directory %s for %s...' % (config[key], key))
       os.mkdir(config[key])
 
 
@@ -581,7 +581,7 @@ class ema(object):
     # Initialize target's params to be source's
     self.source_dict = self.source.state_dict()
     self.target_dict = self.target.state_dict()
-    print('Initializing EMA parameters to be source parameters...')
+    xm.master_print('Initializing EMA parameters to be source parameters...')
     with torch.no_grad():
       for key in self.source_dict:
         self.target_dict[key].data.copy_(self.source_dict[key].data)
@@ -647,9 +647,10 @@ def join_strings(base_string, strings):
 def save_weights(G, D, state_dict, weights_root, experiment_name,
                  name_suffix=None, G_ema=None):
   root = '/'.join([weights_root, experiment_name])
-  if xm.is_master_ordinal():
-    if not os.path.exists(root):
-        os.mkdir(root)
+  try:
+    os.mkdir(root)
+  except:
+      pass
 
   if name_suffix:
     xm.master_print('Saving weights to %s/%s...' % (root, name_suffix))
@@ -838,12 +839,14 @@ def sample(G, z_, y_, config):
 def sample_sheet(G, classes_per_sheet, num_classes, samples_per_class, parallel,
                  samples_root, experiment_name, folder_number, z_=None):
   # Prepare sample directory
-  if xm.is_master_ordinal():
-    if not os.path.isdir('%s/%s' % (samples_root, experiment_name)):
-      os.mkdir('%s/%s' % (samples_root, experiment_name))
-    if not os.path.isdir('%s/%s/%d' % (samples_root, experiment_name, folder_number)):
-      os.mkdir('%s/%s/%d' % (samples_root, experiment_name, folder_number))
-
+  try:
+    os.mkdir('%s/%s' % (samples_root, experiment_name))
+  except:
+      pass
+  try:
+    os.mkdir('%s/%s/%d' % (samples_root, experiment_name, folder_number))
+  except:
+      pass
   device = xm.xla_device(devkind='TPU')
 
   # loop over total number of sheets
@@ -852,7 +855,7 @@ def sample_sheet(G, classes_per_sheet, num_classes, samples_per_class, parallel,
     y = torch.arange(i * classes_per_sheet, (i + 1) * classes_per_sheet,
                      device=device)
     for j in range(samples_per_class):
-      
+
       z_ = torch.randn(classes_per_sheet, G.dim_z, device=device)
       with torch.no_grad():
         o = G(z_[:classes_per_sheet], G.shared(y))
@@ -880,11 +883,14 @@ def interp_sheet(G, num_per_sheet, num_midpoints, num_classes, parallel,
                  samples_root, experiment_name, folder_number, sheet_number=0,
                  fix_z=False, fix_y=False, device=None):
   # Prepare sample directory
-  if xm.is_master_ordinal():
-    if not os.path.isdir('%s/%s' % (samples_root, experiment_name)):
-      os.mkdir('%s/%s' % (samples_root, experiment_name))
-    if not os.path.isdir('%s/%s/%d' % (samples_root, experiment_name, folder_number)):
-      os.mkdir('%s/%s/%d' % (samples_root, experiment_name, folder_number))
+  try:
+    os.mkdir('%s/%s' % (samples_root, experiment_name))
+  except:
+      pass
+  try:
+    os.mkdir('%s/%s/%d' % (samples_root, experiment_name, folder_number))
+  except:
+      pass
 
   device = xm.xla_device(devkind='TPU')
   # Prepare zs and ys
@@ -1005,7 +1011,7 @@ def query_gpu(indices):
 
 # Convenience function to count the number of parameters in a module
 def count_parameters(module):
-  print('Number of parameters: {}'.format(
+  xm.master_print('Number of parameters: {}'.format(
     sum([p.data.nelement() for p in module.parameters()])))
 
 

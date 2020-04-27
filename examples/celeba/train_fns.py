@@ -47,7 +47,6 @@ def GAN_training_function(G, D, GD, sample, ema, state_dict, config):
         D_fake, D_real = GD(z_[:config['batch_size']], y_[:config['batch_size']],
                             x[counter], y[counter], train_G=False,
                             split_D=config['split_D'])
-
         # Compute components of D's loss, average them, and divide by
         # the number of gradient accumulations
         D_loss_real, D_loss_fake = losses.discriminator_loss(D_fake, D_real)
@@ -58,7 +57,7 @@ def GAN_training_function(G, D, GD, sample, ema, state_dict, config):
       # Optionally apply ortho reg in D
       if config['D_ortho'] > 0.0:
         # Debug print to indicate we're using ortho reg in D.
-        print('using modified ortho reg in D')
+        xm.master_print('using modified ortho reg in D')
         utils.ortho(D, config['D_ortho'])
 
       xm.optimizer_step(D.optim)

@@ -6,6 +6,7 @@ from PIL import Image
 import os
 from tqdm import tqdm
 import torch.utils.data as data
+import torch_xla.core.xla_model as xm
 
 
 class CelebAHQ(data.Dataset):
@@ -18,16 +19,16 @@ class CelebAHQ(data.Dataset):
 
     def preprocess(self):
         length = len([name for name in os.listdir(self.img_path) if os.path.isfile(os.path.join(self.img_path, name))])
-        for i in tqdm(range(length)):
+        for i in range(length):
             img_path = os.path.join(self.img_path, str(i)+ '.jpg')
             self.data.append(img_path)
-        print('Finished preprocessing the CelebA dataset...')
+        xm.master_print('Finished preprocessing the CelebA dataset...')
 
 
     def __getitem__(self, index):
         dataset = self.data
         img_path = dataset[index]
-        image = Image.open(img_path)
+        image = Image.open(img_path).convert('RGB')
         return self.transform_img(image), torch.tensor(0, dtype=torch.long)
 
 
