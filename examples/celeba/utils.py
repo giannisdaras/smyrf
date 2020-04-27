@@ -407,11 +407,11 @@ def add_sample_parser(parser):
   return parser
 
 # Convenience dicts
-dset_dict = {'celeba': dset.CelebAHQ}
+dset_dict = {'celeba': dset.CelebAHQ, 'imagenet': dset.ILSVRC_HDF5}
 
-imsize_dict = {'celeba': 128}
+imsize_dict = {'celeba': 128, 'imagenet': 128}
 
-nclass_dict = {'celeba': 1}
+nclass_dict = {'celeba': 1, 'imagenet': 1000}
 
 # Number of classes to put per sample sheet
 classes_per_sheet_dict = {'celeba': 1}

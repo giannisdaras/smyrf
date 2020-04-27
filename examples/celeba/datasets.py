@@ -86,10 +86,6 @@ class ILSVRC_HDF5(data.Dataset):
         img = f['imgs'][index]
         target = f['labels'][index]
 
-
-    # if self.transform is not None:
-        # img = self.transform(img)
-    # Apply my own transform
     img = ((torch.from_numpy(img).float() / 255) - 0.5) * 2
 
     if self.target_transform is not None:
