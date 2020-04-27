@@ -11,6 +11,7 @@ from torch.nn import Parameter as P
 
 import layers
 from sync_batchnorm import SynchronizedBatchNorm2d as SyncBatchNorm2d
+import torch_xla.core.xla_model as xm
 
 
 # Architectures for G
@@ -183,9 +184,9 @@ class Generator(nn.Module):
 
       # If attention on this block, attach it to the end
       if self.arch['attention'][self.arch['resolution'][index]]:
-        print('Adding attention layer in G at resolution %d' % self.arch['resolution'][index])
+        xm.master_print('Adding attention layer in G at resolution %d' % self.arch['resolution'][index])
         if smyrf:
-            print('Attention type: SMYRF')
+            xm.master_print('Attention type: SMYRF')
             self.blocks[-1] += [layers.AttentionApproximation(self.arch['out_channels'][index],
                                                               n_hashes=n_hashes,
                                                               clustering_algo=clustering_algo,
@@ -221,7 +222,7 @@ class Generator(nn.Module):
       return
     self.lr, self.B1, self.B2, self.adam_eps = G_lr, G_B1, G_B2, adam_eps
     if G_mixed_precision:
-      print('Using fp16 adam in G...')
+      xm.master_print('Using fp16 adam in G...')
       import utils
       self.optim = utils.Adam16(params=self.parameters(), lr=self.lr,
                            betas=(self.B1, self.B2), weight_decay=0,
@@ -249,9 +250,9 @@ class Generator(nn.Module):
         elif self.init in ['glorot', 'xavier']:
           init.xavier_uniform_(module.weight)
         else:
-          print('Init style not recognized...')
+          xm.master_print('Init style not recognized...')
         self.param_count += sum([p.data.nelement() for p in module.parameters()])
-    print('Param count for G''s initialized parameters: %d' % self.param_count)
+    xm.master_print('Param count for G''s initialized parameters: %d' % self.param_count)
 
   # Note on this forward function: we pass in a y vector which has
   # already been passed through G.shared to enable easy class-wise
@@ -389,7 +390,7 @@ class Discriminator(nn.Module):
                        downsample=(nn.AvgPool2d(2) if self.arch['downsample'][index] else None))]]
       # If attention on this block, attach it to the end
       if self.arch['attention'][self.arch['resolution'][index]]:
-        print('Adding attention layer in D at resolution %d' % self.arch['resolution'][index])
+        xm.master_print('Adding attention layer in D at resolution %d' % self.arch['resolution'][index])
         self.blocks[-1] += [layers.Attention(self.arch['out_channels'][index],
                                              self.which_conv)]
     # Turn self.blocks into a ModuleList so that it's all properly registered.
@@ -407,7 +408,7 @@ class Discriminator(nn.Module):
     # Set up optimizer
     self.lr, self.B1, self.B2, self.adam_eps = D_lr, D_B1, D_B2, adam_eps
     if D_mixed_precision:
-      print('Using fp16 adam in D...')
+      xm.master_print('Using fp16 adam in D...')
       import utils
       self.optim = utils.Adam16(params=self.parameters(), lr=self.lr,
                              betas=(self.B1, self.B2), weight_decay=0, eps=self.adam_eps)
@@ -432,9 +433,9 @@ class Discriminator(nn.Module):
         elif self.init in ['glorot', 'xavier']:
           init.xavier_uniform_(module.weight)
         else:
-          print('Init style not recognized...')
+          xm.master_print('Init style not recognized...')
         self.param_count += sum([p.data.nelement() for p in module.parameters()])
-    print('Param count for D''s initialized parameters: %d' % self.param_count)
+    xm.master_print('Param count for D''s initialized parameters: %d' % self.param_count)
 
   def forward(self, x, y=None):
     # Stick x into h for cleaner for loops without flow control
@@ -489,6 +490,7 @@ class G_D(nn.Module):
       D_class = torch.cat([gy, dy], 0) if dy is not None else gy
       # Get Discriminator output
       D_out = self.D(D_input, D_class)
+
       if x is not None:
         return torch.split(D_out, [G_z.shape[0], x.shape[0]]) # D_fake, D_real
       else:

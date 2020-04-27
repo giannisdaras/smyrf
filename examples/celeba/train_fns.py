@@ -9,6 +9,14 @@ import os
 import utils
 import losses
 
+import torch_xla.core.xla_model as xm
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+def master_log(s):
+    if xm.is_master_ordinal():
+        logging.log(logging.INFO, s)
 
 # Dummy training function for debugging
 def dummy_training_function():
@@ -39,7 +47,6 @@ def GAN_training_function(G, D, GD, sample, ema, state_dict, config):
         D_fake, D_real = GD(z_[:config['batch_size']], y_[:config['batch_size']],
                             x[counter], y[counter], train_G=False,
                             split_D=config['split_D'])
-
         # Compute components of D's loss, average them, and divide by
         # the number of gradient accumulations
         D_loss_real, D_loss_fake = losses.discriminator_loss(D_fake, D_real)
@@ -50,10 +57,10 @@ def GAN_training_function(G, D, GD, sample, ema, state_dict, config):
       # Optionally apply ortho reg in D
       if config['D_ortho'] > 0.0:
         # Debug print to indicate we're using ortho reg in D.
-        print('using modified ortho reg in D')
+        xm.master_print('using modified ortho reg in D')
         utils.ortho(D, config['D_ortho'])
 
-      D.optim.step()
+      xm.optimizer_step(D.optim)
 
     # Optionally toggle "requires_grad"
     if config['toggle_grads']:
@@ -76,7 +83,7 @@ def GAN_training_function(G, D, GD, sample, ema, state_dict, config):
       # Don't ortho reg shared, it makes no sense. Really we should blacklist any embeddings for this
       utils.ortho(G, config['G_ortho'],
                   blacklist=[param for param in G.shared.parameters()])
-    G.optim.step()
+    xm.optimizer_step(G.optim)
 
     # If we have an ema, update it, regardless of if we test with it or not
     if config['ema']:
@@ -117,9 +124,6 @@ def save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y,
 
   # Save a random sample sheet with fixed z and y
   with torch.no_grad():
-    if config['parallel']:
-      fixed_Gz =  nn.parallel.data_parallel(which_G, (fixed_z, which_G.shared(fixed_y)))
-    else:
       fixed_Gz = which_G(fixed_z, which_G.shared(fixed_y))
   if not os.path.isdir('%s/%s' % (config['samples_root'], experiment_name)):
     os.mkdir('%s/%s' % (config['samples_root'], experiment_name))
@@ -132,7 +136,7 @@ def save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y,
   utils.sample_sheet(which_G,
                      classes_per_sheet=utils.classes_per_sheet_dict[config['dataset']],
                      num_classes=config['n_classes'],
-                     samples_per_class=10, parallel=config['parallel'],
+                     samples_per_class=5, parallel=config['parallel'],
                      samples_root=config['samples_root'],
                      experiment_name=experiment_name,
                      folder_number=state_dict['itr'],
@@ -148,7 +152,7 @@ def save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y,
                        experiment_name=experiment_name,
                        folder_number=state_dict['itr'],
                        sheet_number=0,
-                       fix_z=fix_z, fix_y=fix_y, device='cuda')
+                       fix_z=fix_z, fix_y=fix_y)
 
 
 
@@ -156,27 +160,29 @@ def save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y,
     are an improvement over the previous best (either in IS or FID,
     user-specified), logs the results, and saves a best_ copy if it's an
     improvement. '''
-def test(G, D, G_ema, sample_fn, state_dict, config, sample, get_inception_metrics,
+def test(G, D, G_ema, sample, state_dict, config, model_sample, get_inception_metrics,
          experiment_name, test_log):
-  print('Gathering inception metrics...')
+  master_log('Gathering inception metrics...')
   if config['accumulate_stats']:
     utils.accumulate_standing_stats(G_ema if config['ema'] and config['use_ema'] else G,
-                           sample_fn, config['n_classes'],
+                           sample, config['n_classes'],
                            config['num_standing_accumulations'])
-  IS_mean, IS_std, FID = get_inception_metrics(sample,
+  IS_mean, IS_std, FID = get_inception_metrics(model_sample,
                                                config['num_inception_images'],
                                                num_splits=10)
-  print('Itr %d: PYTORCH UNOFFICIAL Inception Score is %3.3f +/- %3.3f, PYTORCH UNOFFICIAL FID is %5.4f' % (state_dict['itr'], IS_mean, IS_std, FID))
+  master_log('Itr %d: PYTORCH UNOFFICIAL Inception Score is %3.3f +/- %3.3f, PYTORCH UNOFFICIAL FID is %5.4f' % (state_dict['itr'], IS_mean, IS_std, FID))
   # If improved over previous best metric, save approrpiate copy
   if ((config['which_best'] == 'IS' and IS_mean > state_dict['best_IS'])
     or (config['which_best'] == 'FID' and FID < state_dict['best_FID'])):
-    print('%s improved over previous best, saving checkpoint...' % config['which_best'])
+    master_log('%s improved over previous best, saving checkpoint...' % config['which_best'])
     utils.save_weights(G, D, state_dict, config['weights_root'],
                        experiment_name, 'best%d' % state_dict['save_best_num'],
                        G_ema if config['ema'] else None)
     state_dict['save_best_num'] = (state_dict['save_best_num'] + 1 ) % config['num_best_copies']
   state_dict['best_IS'] = max(state_dict['best_IS'], IS_mean)
   state_dict['best_FID'] = min(state_dict['best_FID'], FID)
-  # Log results to file
-  test_log.log(itr=int(state_dict['itr']), IS_mean=float(IS_mean),
-               IS_std=float(IS_std), FID=float(FID))
+
+  if xm.is_master_ordinal():
+      # Log results to file
+      test_log.log(itr=int(state_dict['itr']), IS_mean=float(IS_mean),
+                   IS_std=float(IS_std), FID=float(FID))

@@ -130,4 +130,5 @@ dmypy.json
 
 # Data
 examples/celeba/CelebAMask-HQ
+examples/nlp/glue_data
 *.npz

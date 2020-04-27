@@ -22,6 +22,15 @@ from torch.nn import Parameter as P
 from torchvision.models.inception import inception_v3
 import logging
 from tqdm import tqdm
+# xla imports
+import torch_xla.core.xla_model as xm
+import torch_xla.distributed.data_parallel as dp
+
+logging.basicConfig(level=logging.INFO)
+
+def master_log(s):
+    if xm.is_master_ordinal():
+        logging.log(logging.INFO, s)
 
 # Module that wraps the inception network to enable use with dataparallel and
 # returning pool features and logits.
@@ -122,21 +131,20 @@ def torch_cov(m, rowvar=False):
 
 # Pytorch implementation of matrix sqrt, from Tsung-Yu Lin, and Subhransu Maji
 # https://github.com/msubhransu/matrix-sqrt
-def sqrt_newton_schulz(A, numIters, dtype=None):
+def sqrt_newton_schulz(A, numIters):
   with torch.no_grad():
-    if dtype is None:
-      dtype = A.type()
-    batchSize = A.shape[0]
+    device = A.device
+    bs = A.shape[0]
     dim = A.shape[1]
     normA = A.mul(A).sum(dim=1).sum(dim=1).sqrt()
-    Y = A.div(normA.view(batchSize, 1, 1).expand_as(A));
-    I = torch.eye(dim,dim).view(1, dim, dim).repeat(batchSize,1,1).type(dtype)
-    Z = torch.eye(dim,dim).view(1, dim, dim).repeat(batchSize,1,1).type(dtype)
+    Y = A.div(normA.view(bs, 1, 1).expand_as(A));
+    I = torch.eye(dim, dim, dtype=torch.float, device=device).view(1, dim, dim).repeat(bs, 1, 1)
+    Z = torch.eye(dim, dim, dtype=torch.float, device=device).view(1, dim, dim).repeat(bs, 1, 1)
     for i in range(numIters):
       T = 0.5*(3.0*I - Z.bmm(Y))
       Y = Y.bmm(T)
       Z = T.bmm(Z)
-    sA = Y*torch.sqrt(normA).view(batchSize, 1, 1).expand_as(A)
+    sA = Y*torch.sqrt(normA).view(bs, 1, 1).expand_as(A)
   return sA
 
 
@@ -246,29 +254,45 @@ def calculate_inception_score(pred, num_splits=10):
 # Loop and run the sampler and the net until it accumulates num_inception_images
 # activations. Return the pool, the logits, and the labels (if one wants
 # Inception Accuracy the labels of the generated class will be needed)
-def accumulate_inception_activations(sample, net, num_inception_images=50000):
+def accumulate_inception_activations(model_sample, net, num_inception_images=50000):
   pool, logits = [], []
-  pbar = tqdm(range(num_inception_images))
-  pbar.set_description('Sampling...')
-  while (torch.cat(logits, 0).shape[0] if len(logits) else 0) < num_inception_images:
+  if xm.is_master_ordinal():
+    pbar = tqdm(range(num_inception_images))
+    pbar.set_description('Sampling...')
+
+  # get batch size
+  bs = model_sample().shape[0]
+
+  while ((torch.cat(logits, 0).shape[0] if len(logits) else 0)) < num_inception_images:
     with torch.no_grad():
-      images, labels_val = sample()
+      images = model_sample()
+      device = images.device
       pool_val, logits_val = net(images.float())
       pool += [pool_val]
       logits += [F.softmax(logits_val, 1)]
-      pbar.update(images.shape[0])
+      if xm.is_master_ordinal():
+        pbar.update(images.shape[0])
+      
       # free memory
-      del images, labels_val, pool_val, logits_val
-  return torch.cat(pool, 0), torch.cat(logits, 0)
+      del images, pool_val, logits_val
+  
+  if xm.is_master_ordinal():
+      pbar.close()
+  
+  pool_ = torch.cat(pool, 0)
+  logits_ = torch.cat(logits, 0)
+  
+  return pool_, logits_
+
 
 
 # Load and wrap the Inception model
 def load_inception_net(parallel=False):
+  device = xm.xla_device()
+
   inception_model = inception_v3(pretrained=True, transform_input=False)
-  inception_model = WrapInception(inception_model.eval()).cuda()
-  if parallel:
-    print('Parallelizing Inception module...')
-    inception_model = nn.DataParallel(inception_model)
+  inception_model = WrapInception(inception_model.eval()).to(device)
+
   return inception_model
 
 
@@ -283,36 +307,33 @@ def prepare_inception_metrics(dataset, parallel, no_inception=True, no_fid=False
   dataset = dataset.strip('_hdf5')
   data_mu = np.load(dataset+'_inception_moments.npz')['mu']
   data_sigma = np.load(dataset+'_inception_moments.npz')['sigma']
-  logging.log(logging.INFO, 'Loading inception net')
+  master_log('Loading inception net')
+
   # Load network
   net = load_inception_net(parallel)
-  def get_inception_metrics(sample, num_inception_images, num_splits=10,
+  def get_inception_metrics(model_sample, num_inception_images, num_splits=10,
                             use_torch=True):
-
-    logging.log(logging.INFO, 'Gathering activations...')
-    pool, logits = accumulate_inception_activations(sample, net, num_inception_images)
-    logging.log(logging.INFO, 'Calculating Inception Score...')
+    master_log('Gathering activations...')
+    pool, logits = accumulate_inception_activations(model_sample, net, num_inception_images)
 
     if no_inception:
         IS_mean = 0.0
         IS_std = 0.0
     else:
+        master_log('Calculating Inception Score...')
         IS_mean, IS_std = calculate_inception_score(logits.cpu().numpy(), num_splits)
 
     if no_fid:
       FID = 9999.0
     else:
-      logging.log(logging.INFO, 'Calculating means and covariances...')
-      if use_torch:
-        mu, sigma = torch.mean(pool, 0), torch_cov(pool, rowvar=False)
-      else:
-        mu, sigma = np.mean(pool.cpu().numpy(), axis=0), np.cov(pool.cpu().numpy(), rowvar=False)
-      logging.log(logging.INFO, 'Covariances calculated, getting FID...')
-      if use_torch:
-        FID = torch_calculate_frechet_distance(mu, sigma, torch.tensor(data_mu).float().cuda(), torch.tensor(data_sigma).float().cuda())
-        FID = float(FID.cpu().numpy())
-      else:
-        FID = numpy_calculate_frechet_distance(mu.cpu().numpy(), sigma.cpu().numpy(), data_mu, data_sigma)
+      master_log('Calculating means and covariances...')
+      mu, sigma = torch.mean(pool, 0), torch_cov(pool, rowvar=False)
+      master_log('Covariances calculated, getting FID...')
+      FID = 9999.0
+      FID = torch_calculate_frechet_distance(mu.cpu(), sigma.cpu(), torch.tensor(data_mu).cpu(), torch.tensor(data_sigma).cpu())
+      FID = float(FID.cpu().numpy())
+      master_log('Calculated FID')
+
     # Delete mu, sigma, pool, logits just in case
     del mu, sigma, pool, logits
     return IS_mean, IS_std, FID
