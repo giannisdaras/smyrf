@@ -28,7 +28,7 @@ import utils
 import losses
 import train_fns
 from sync_batchnorm import patch_replication_callback
-from configs import celeba_config
+from configs import celeba_config, imagenet_config
 
 # xla imports
 import torch_xla.core.xla_model as xm
@@ -57,9 +57,6 @@ def run(config):
     xm.master_print('Skipping initialization for training resumption...')
     config['skip_init'] = True
   config = utils.update_config_roots(config)
-
-  assert config['save_every'] % config['num_devices'] == 0
-  assert config['test_every'] % config['num_devices'] == 0
 
   # Seed RNG
   utils.seed_rng(config['seed'])
@@ -184,8 +181,9 @@ def run(config):
     for i, (x, y) in enumerate(pl_loader):
       if xm.is_master_ordinal():
           # Increment the iteration counter
-          pbar.update(config['num_devices'])
-      state_dict['itr'] += config['num_devices']
+          pbar.update(1)
+
+      state_dict['itr'] += 1
       # Make sure G and D are in training mode, just in case they got set to eval
       # For D, which typically doesn't have BN, this shouldn't matter much.
       G.train()
