@@ -414,7 +414,7 @@ imsize_dict = {'celeba': 128, 'imagenet': 128}
 nclass_dict = {'celeba': 1, 'imagenet': 1000}
 
 # Number of classes to put per sample sheet
-classes_per_sheet_dict = {'celeba': 1}
+classes_per_sheet_dict = {'celeba': 1, 'imagenet': 10}
 
 activation_dict = {'inplace_relu': nn.ReLU(inplace=True),
                    'relu': nn.ReLU(inplace=False),
@@ -565,7 +565,10 @@ def prepare_root(config):
   for key in ['weights_root', 'logs_root', 'samples_root']:
     if not os.path.exists(config[key]):
       xm.master_print('Making directory %s for %s...' % (config[key], key))
-      os.mkdir(config[key])
+      try:
+        os.mkdir(config[key])
+      except:
+          pass
 
 
 # Simple wrapper that applies EMA to a model. COuld be better done in 1.0 using

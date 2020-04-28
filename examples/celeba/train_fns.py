@@ -126,7 +126,10 @@ def save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y,
   with torch.no_grad():
       fixed_Gz = which_G(fixed_z, which_G.shared(fixed_y))
   if not os.path.isdir('%s/%s' % (config['samples_root'], experiment_name)):
-    os.mkdir('%s/%s' % (config['samples_root'], experiment_name))
+      try:
+        os.mkdir('%s/%s' % (config['samples_root'], experiment_name))
+      except:
+          pass
   image_filename = '%s/%s/fixed_samples%d.jpg' % (config['samples_root'],
                                                   experiment_name,
                                                   state_dict['itr'])
