@@ -697,7 +697,7 @@ def load_weights(G, D, state_dict, weights_root, experiment_name,
       strict=strict)
     if load_optim:
       D.optim.load_state_dict(
-        torch.load('%s/%s.pth' % (root, join_strings('_', ['D_optim', name_suffix]))), map_location=torch.device('cpu'))
+        torch.load('%s/%s.pth' % (root, join_strings('_', ['D_optim', name_suffix])), map_location=torch.device('cpu')))
   # Load state dict
   for item in state_dict:
     state_dict[item] = torch.load('%s/%s.pth' % (root, join_strings('_', ['state_dict', name_suffix])), map_location=torch.device('cpu'))[item]
