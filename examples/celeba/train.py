@@ -232,9 +232,9 @@ def run(config):
     pbar.close()
 
 def main(index):
-  xm.master_print(celeba_config)
-  run(celeba_config)
+  xm.master_print(imagenet_config)
+  run(imagenet_config)
 
 
 if __name__ == '__main__':
-  xmp.spawn(main, args=(), nprocs=celeba_config['num_devices'])
+  xmp.spawn(main, args=(), nprocs=imagenet_config['num_devices'])
