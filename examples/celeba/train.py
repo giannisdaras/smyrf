@@ -111,10 +111,20 @@ def run(config):
   # If loading from a pre-trained model, load weights
   if config['resume']:
     xm.master_print('Loading weights...')
+    G.cpu()
+    D.cpu()
+    if config['ema']:
+        G_ema.cpu()
     utils.load_weights(G, D, state_dict,
                        config['weights_root'], experiment_name,
                        config['load_weights'] if config['load_weights'] else None,
                        G_ema if config['ema'] else None)
+    G.to(device)
+    D.to(device)
+    if config['ema']:
+        G_ema.to(device)
+
+    xm.master_print('Weights loaded...')
 
 
   # Prepare loggers for stats; metrics holds test metrics,
