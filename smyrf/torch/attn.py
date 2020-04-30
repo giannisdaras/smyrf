@@ -83,17 +83,17 @@ class SmyrfAttention(nn.Module):
         del Keys
 
         q_rev_positions = torch.argsort(q_positions, dim=-1)
-        q_offset = torch.arange(self.n_hashes * bs, device=queries.device).unsqueeze(-1) * q_seqlen
-        k_offset = torch.arange(self.n_hashes * bs, device=queries.device).unsqueeze(-1) * k_seqlen
+        q_offset = torch.arange(bs, device=queries.device).unsqueeze(-1) * q_seqlen
+        k_offset = torch.arange(bs, device=queries.device).unsqueeze(-1) * k_seqlen
 
 
-        q_flat = (q_positions.reshape(-1, q_seqlen) + q_offset).reshape(-1)
-        k_flat = (k_positions.reshape(-1, k_seqlen) + k_offset).reshape(-1)
+        q_flat = (q_positions + q_offset).reshape(-1)
+        k_flat = (k_positions + k_offset).reshape(-1)
 
         # sorted queries, keys, values
-        s_queries = queries.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1).reshape(-1, dim).index_select(0, q_flat).reshape(-1, self.q_attn_size, dim)
-        s_keys = keys.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1).reshape(-1, dim).index_select(0, k_flat).reshape(-1, self.k_attn_size, dim)
-        s_values = values.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1).reshape(-1, v_dim).index_select(0, k_flat).reshape(-1, self.k_attn_size, v_dim)
+        s_queries = queries.reshape(-1, dim).index_select(0, q_flat).reshape(-1, self.q_attn_size, dim)
+        s_keys = keys.reshape(-1, dim).index_select(0, k_flat).reshape(-1, self.k_attn_size, dim)
+        s_values = values.reshape(-1, v_dim).index_select(0, k_flat).reshape(-1, self.k_attn_size, v_dim)
 
 
         # free memory
@@ -111,6 +111,7 @@ class SmyrfAttention(nn.Module):
         bo = (dots @ s_values).reshape(self.n_hashes, bs, q_seqlen, -1)
 
         # undo sort
+        q_offset = torch.arange(bs * self.n_hashes, device=queries.device).unsqueeze(-1) * q_seqlen
         q_rev_flat = (q_rev_positions.reshape(-1, q_seqlen) + q_offset).reshape(-1)
         o = bo.reshape(-1, v_dim).index_select(0, q_rev_flat).reshape(self.n_hashes, bs, q_seqlen, -1)
 
