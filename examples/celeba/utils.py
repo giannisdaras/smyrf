@@ -414,7 +414,7 @@ imsize_dict = {'celeba': 128, 'imagenet': 128}
 nclass_dict = {'celeba': 1, 'imagenet': 1000}
 
 # Number of classes to put per sample sheet
-classes_per_sheet_dict = {'celeba': 1}
+classes_per_sheet_dict = {'celeba': 1, 'imagenet': 10}
 
 activation_dict = {'inplace_relu': nn.ReLU(inplace=True),
                    'relu': nn.ReLU(inplace=False),
@@ -565,7 +565,10 @@ def prepare_root(config):
   for key in ['weights_root', 'logs_root', 'samples_root']:
     if not os.path.exists(config[key]):
       xm.master_print('Making directory %s for %s...' % (config[key], key))
-      os.mkdir(config[key])
+      try:
+        os.mkdir(config[key])
+      except:
+          pass
 
 
 # Simple wrapper that applies EMA to a model. COuld be better done in 1.0 using
@@ -678,29 +681,29 @@ def load_weights(G, D, state_dict, weights_root, experiment_name,
                  name_suffix=None, G_ema=None, strict=True, load_optim=True):
   root = '/'.join([weights_root, experiment_name])
   if name_suffix:
-    print('Loading %s weights from %s...' % (name_suffix, root))
+    xm.master_print('Loading %s weights from %s...' % (name_suffix, root))
   else:
-    print('Loading weights from %s...' % root)
+    xm.master_print('Loading weights from %s...' % root)
   if G is not None:
     G.load_state_dict(
-      torch.load('%s/%s.pth' % (root, join_strings('_', ['G', name_suffix]))),
+      torch.load('%s/%s.pth' % (root, join_strings('_', ['G', name_suffix])), map_location=torch.device('cpu')),
       strict=strict)
     if load_optim:
       G.optim.load_state_dict(
-        torch.load('%s/%s.pth' % (root, join_strings('_', ['G_optim', name_suffix]))))
+        torch.load('%s/%s.pth' % (root, join_strings('_', ['G_optim', name_suffix])), map_location=torch.device('cpu')))
   if D is not None:
     D.load_state_dict(
-      torch.load('%s/%s.pth' % (root, join_strings('_', ['D', name_suffix]))),
+      torch.load('%s/%s.pth' % (root, join_strings('_', ['D', name_suffix])), map_location=torch.device('cpu')),
       strict=strict)
     if load_optim:
       D.optim.load_state_dict(
-        torch.load('%s/%s.pth' % (root, join_strings('_', ['D_optim', name_suffix]))))
+        torch.load('%s/%s.pth' % (root, join_strings('_', ['D_optim', name_suffix])), map_location=torch.device('cpu')))
   # Load state dict
   for item in state_dict:
-    state_dict[item] = torch.load('%s/%s.pth' % (root, join_strings('_', ['state_dict', name_suffix])))[item]
+    state_dict[item] = torch.load('%s/%s.pth' % (root, join_strings('_', ['state_dict', name_suffix])), map_location=torch.device('cpu'))[item]
   if G_ema is not None:
     G_ema.load_state_dict(
-      torch.load('%s/%s.pth' % (root, join_strings('_', ['G_ema', name_suffix]))),
+      torch.load('%s/%s.pth' % (root, join_strings('_', ['G_ema', name_suffix])), map_location=torch.device('cpu')),
       strict=strict)
 
 
