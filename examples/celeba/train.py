@@ -201,9 +201,6 @@ def run(config):
         train_log.log(itr=int(state_dict['itr']),
                       **{**utils.get_SVs(G, 'G'), **utils.get_SVs(D, 'D')})
 
-      if xm.is_master_ordinal():
-          pbar.set_description(','.join(['itr: %d' % state_dict['itr']] + ['%s : %+4.3f' % (key, metrics[key]) for key in metrics]))
-
       # Save weights and copies as configured at specified interval
       if (not (state_dict['itr'] % config['save_every'])):
         if config['G_eval_mode']:
@@ -229,6 +226,10 @@ def run(config):
 
         train_fns.test(G, D, G_ema, sample, state_dict, config, model_sample,
                        get_inception_metrics, experiment_name, test_log)
+
+      #import torch_xla.debug.metrics as met
+      #print(met.metrics_report())
+
 
       if state_dict['itr'] >= config['total_steps']:
           break
