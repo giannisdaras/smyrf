@@ -103,7 +103,7 @@ class SmyrfAttention(nn.Module):
         # softmax denominator
         dots_logsumexp = torch.logsumexp(inner, dim=-1, keepdim=True)
         # softmax
-        dots = torch.exp(inner - dots_logsumexp).type(inner.type())
+        dots = torch.exp(inner - dots_logsumexp)
         # dropout
         dots = self.dropout(dots)
 

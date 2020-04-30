@@ -226,12 +226,10 @@ def torch_calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
   --   : The Frechet Distance.
   """
 
-
   assert mu1.shape == mu2.shape, \
     'Training and test mean vectors have different lengths'
   assert sigma1.shape == sigma2.shape, \
     'Training and test covariances have different dimensions'
-
   diff = mu1 - mu2
   # Run 50 itrs of newton-schulz to get the matrix sqrt of sigma1 dot sigma2
   covmean = sqrt_newton_schulz(sigma1.mm(sigma2).unsqueeze(0), 50).squeeze()
@@ -242,46 +240,49 @@ def torch_calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 
 # Calculate Inception Score mean + std given softmax'd logits and number of splits
 def calculate_inception_score(pred, num_splits=10):
-  scores = []
-  for index in range(num_splits):
-    pred_chunk = pred[index * (pred.shape[0] // num_splits): (index + 1) * (pred.shape[0] // num_splits), :]
-    kl_inception = pred_chunk * (np.log(pred_chunk) - np.log(np.expand_dims(np.mean(pred_chunk, 0), 0)))
-    kl_inception = np.mean(np.sum(kl_inception, 1))
-    scores.append(np.exp(kl_inception))
-  return np.mean(scores), np.std(scores)
+  #scores = []
+  #for index in range(num_splits):
+  #print('Running {}'.format(index))
+  #pred_chunk = pred[index * (pred.shape[0] // num_splits): (index + 1) * (pred.shape[0] // num_splits), :]
+  #kl_inception = pred_chunk * (torch.log(pred_chunk) - torch.log(torch.mean(pred_chunk, 0)).unsqueeze(0))
+  #kl_inception = torch.mean(torch.sum(kl_inception, 1))
+  #scores.append(torch.exp(kl_inception))
+  #print('Creating torch tensor...')
+  #scores = torch.tensor(scores, device=pred.device)
+  kl_inception = pred * (torch.log(pred) - torch.log(torch.mean(pred, 0)).unsqueeze(0))
+  kl_inception = torch.mean(torch.sum(kl_inception, 1))
+  mean_val = kl_inception.mean()
+  return mean_val, 0.0
 
 
 # Loop and run the sampler and the net until it accumulates num_inception_images
 # activations. Return the pool, the logits, and the labels (if one wants
 # Inception Accuracy the labels of the generated class will be needed)
 def accumulate_inception_activations(model_sample, net, num_inception_images=50000):
-  pool, logits = [], []
-  if xm.is_master_ordinal():
-    pbar = tqdm(range(num_inception_images))
-    pbar.set_description('Sampling...')
-
   # get batch size
-  bs = model_sample().shape[0]
+  sampled = model_sample()
+  device = sampled.device
+  bs = sampled.shape[0]
+  nums = (num_inception_images // bs) + 1
+  pool_shape = net(sampled)[0].shape
+  logits_shape = net(sampled)[1].shape
 
-  while ((torch.cat(logits, 0).shape[0] if len(logits) else 0)) < num_inception_images:
+  pool_shape = (nums,) + pool_shape
+  logits_shape = (nums,) + logits_shape
+
+  pool_ = torch.empty(pool_shape, device=device)
+  logits_ = torch.empty(logits_shape, device=device)
+
+  for i in range(nums):
     with torch.no_grad():
       images = model_sample()
-      device = images.device
-      pool_val, logits_val = net(images.float())
-      pool += [pool_val]
-      logits += [F.softmax(logits_val, 1)]
-      if xm.is_master_ordinal():
-        pbar.update(images.shape[0])
-      
-      # free memory
-      del images, pool_val, logits_val
-  
-  if xm.is_master_ordinal():
-      pbar.close()
-  
-  pool_ = torch.cat(pool, 0)
-  logits_ = torch.cat(logits, 0)
-  
+      pool_val, logits_val = net(images)
+      pool_[i] = pool_val
+      logits_[i] = F.softmax(logits_val, 1)
+      del images
+
+  pool_ = pool_.reshape(-1, pool_shape[-1])
+  logits_ = logits_.reshape(-1, logits_shape[-1])
   return pool_, logits_
 
 
@@ -289,7 +290,6 @@ def accumulate_inception_activations(model_sample, net, num_inception_images=500
 # Load and wrap the Inception model
 def load_inception_net(parallel=False):
   device = xm.xla_device()
-
   inception_model = inception_v3(pretrained=True, transform_input=False)
   inception_model = WrapInception(inception_model.eval()).to(device)
 
@@ -313,28 +313,24 @@ def prepare_inception_metrics(dataset, parallel, no_inception=True, no_fid=False
   net = load_inception_net(parallel)
   def get_inception_metrics(model_sample, num_inception_images, num_splits=10,
                             use_torch=True):
-    master_log('Gathering activations...')
     pool, logits = accumulate_inception_activations(model_sample, net, num_inception_images)
-
     if no_inception:
         IS_mean = 0.0
         IS_std = 0.0
     else:
         master_log('Calculating Inception Score...')
-        IS_mean, IS_std = calculate_inception_score(logits.cpu().numpy(), num_splits)
-
+        IS_mean, IS_std = calculate_inception_score(logits, num_splits)
     if no_fid:
+      xm.master_print('FID dismissed...')
       FID = 9999.0
     else:
-      master_log('Calculating means and covariances...')
       mu, sigma = torch.mean(pool, 0), torch_cov(pool, rowvar=False)
-      master_log('Covariances calculated, getting FID...')
-      FID = 9999.0
-      FID = torch_calculate_frechet_distance(mu.cpu(), sigma.cpu(), torch.tensor(data_mu).cpu(), torch.tensor(data_sigma).cpu())
-      FID = float(FID.cpu().numpy())
-      master_log('Calculated FID')
-
-    # Delete mu, sigma, pool, logits just in case
-    del mu, sigma, pool, logits
+      device = mu.device
+      FID = float(torch_calculate_frechet_distance(mu, sigma, torch.tensor(data_mu).to(device), torch.tensor(data_sigma).to(device)).cpu().numpy())
+      # mu, sigma = np.mean(pool.cpu().numpy(), axis=0), np.cov(pool.cpu().numpy(), rowvar=False)
+      # xm.master_print('Covariances calculated, getting FID...')
+      # FID = numpy_calculate_frechet_distance(mu.cpu().numpy(), sigma.cpu().numpy(), data_mu, data_sigma)
+      # master_log('Calculated FID')
+      # del mu, sigma
     return IS_mean, IS_std, FID
   return get_inception_metrics

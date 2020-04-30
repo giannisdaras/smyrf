@@ -89,9 +89,9 @@ def GAN_training_function(G, D, GD, sample, ema, state_dict, config):
     if config['ema']:
       ema.update(state_dict['itr'])
 
-    out = {'G_loss': float(G_loss.item()),
-            'D_loss_real': float(D_loss_real.item()),
-            'D_loss_fake': float(D_loss_fake.item())}
+    out = {'G_loss': G_loss,
+            'D_loss_real': D_loss_real,
+            'D_loss_fake': D_loss_fake}
     # Return G's loss and the components of D's loss.
     return out
   return train
@@ -126,7 +126,10 @@ def save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y,
   with torch.no_grad():
       fixed_Gz = which_G(fixed_z, which_G.shared(fixed_y))
   if not os.path.isdir('%s/%s' % (config['samples_root'], experiment_name)):
-    os.mkdir('%s/%s' % (config['samples_root'], experiment_name))
+      try:
+        os.mkdir('%s/%s' % (config['samples_root'], experiment_name))
+      except:
+          pass
   image_filename = '%s/%s/fixed_samples%d.jpg' % (config['samples_root'],
                                                   experiment_name,
                                                   state_dict['itr'])

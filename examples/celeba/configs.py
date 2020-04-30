@@ -148,15 +148,14 @@ imagenet_config = {
     'model': 'BigGAN',
     'G_param': 'SN',
     'D_param': 'SN',
-    'G_ch': 64,
-    'D_ch': 64,
+    'G_ch': 96,
+    'D_ch': 96,
     'G_depth': 1,
     'D_depth': 1,
-    'D_thin': True,
     'D_wide': True,
     'G_shared': True,
     'shared_dim': 128,
-    'dim_z': 128,
+    'dim_z': 120,
     'z_var': 1.0,
     'hier': True,
     'cross_replica': False,
@@ -171,7 +170,7 @@ imagenet_config = {
     'seed': 0,
     'G_init': 'ortho',
     'D_init': 'ortho',
-    'skip_init': False,
+    'skip_init': True,
 
     ## Optimization
     'batch_size': 64,
@@ -208,8 +207,8 @@ imagenet_config = {
 
 
     ## EMA configuration
-    'ema': True,
-    'use_ema': True,
+    'ema': False,
+    'use_ema': False,
     'ema_decay': 0.9999,
     'ema_start': 20000,
     ## Numerical and SV stuff
@@ -249,21 +248,22 @@ imagenet_config = {
     ## LSH
     'r': 4,
     # Checkpointing and testing
-    'num_inception_images': 1000,
-    'test_every': 1000000,
-    'save_every': 5000,
+    'num_inception_images': 10000,
+    'test_every': 999999,
+    'save_every': 1000,
     'num_save_copies': 0,
     'num_best_copies': 5,
     'which_best': 'FID',
+    'resume': True,
+     ## testing
     'no_fid': True,
     'no_inception': True,
-    'resume': False,
     'load_weights': '',
     'base_root': '',
     'weights_root': 'weights/',
     'data_root': 'ILSVRC128.hdf5',
     'logs_root': 'logs/',
     'samples_root': 'samples/',
-    'experiment_name': 'imagenet_scratch',
+    'experiment_name': 'imagenet',
     'hash_name': False,
 }

@@ -76,14 +76,14 @@ def run(config):
   device = xm.xla_device(devkind='TPU')
 
   # Next, build the model
-  G = model.Generator(**config).to(device)
-  D = model.Discriminator(**config).to(device)
+  G = model.Generator(**config)
+  D = model.Discriminator(**config)
 
    # If using EMA, prepare it
   if config['ema']:
     xm.master_print('Preparing EMA for G with decay of {}'.format(config['ema_decay']))
     G_ema = model.Generator(**{**config, 'skip_init':True,
-                               'no_optim': True}).to(device)
+                               'no_optim': True})
     ema = utils.ema(G, G_ema, config['ema_decay'], config['ema_start'])
   else:
     G_ema, ema = None, None
@@ -97,13 +97,7 @@ def run(config):
   if config['D_fp16']:
     xm.master_print('Casting D to fp16...')
     D = D.half()
-    # Consider automatically reducing SN_eps?
-  GD = model.G_D(G, D)
 
-  xm.master_print(G)
-  xm.master_print(D)
-  xm.master_print('Number of params in G: {} D: {}'.format(
-    *[sum([p.data.nelement() for p in net.parameters()]) for net in [G,D]]))
   # Prepare state dict, which holds things like itr #
   state_dict = {'itr': 0, 'save_num': 0, 'save_best_num': 0,
                 'best_IS': 0, 'best_FID': 999999, 'config': config}
@@ -115,7 +109,17 @@ def run(config):
                        config['weights_root'], experiment_name,
                        config['load_weights'] if config['load_weights'] else None,
                        G_ema if config['ema'] else None)
+  G.to(device)
+  D.to(device)
+  if config['ema']:
+    G_ema.to(device)
 
+  # Consider automatically reducing SN_eps?
+  GD = model.G_D(G, D)
+  xm.master_print(G)
+  xm.master_print(D)
+  xm.master_print('Number of params in G: {} D: {}'.format(
+    *[sum([p.data.nelement() for p in net.parameters()]) for net in [G,D]]))
 
   # Prepare loggers for stats; metrics holds test metrics,
   # lmetrics holds any desired training metrics.
@@ -159,19 +163,12 @@ def run(config):
   sample = lambda: utils.prepare_z_y(G_batch_size, G.dim_z,
                                      config['n_classes'], device=device,
                                      fp16=config['G_fp16'])
-
   # Prepare a fixed z & y to see individual sample evolution throghout training
   fixed_z, fixed_y = sample()
 
   train = train_fns.GAN_training_function(G, D, GD, sample, ema, state_dict,
                                           config)
 
-  def G_sample():
-      z, y = sample()
-      which_G = G_ema if config['ema'] and config['use_ema'] else G
-      return which_G(z, which_G.shared(y))
-
-  model_sample = functools.partial(G_sample)
   xm.master_print('Beginning training...')
 
   pbar = tqdm(total=config['total_steps'])
@@ -190,12 +187,10 @@ def run(config):
       D.train()
       if config['ema']:
         G_ema.train()
-      if config['D_fp16']:
-        x, y = x.to(device).half(), y.to(device)
-      else:
-        x, y = x.to(device), y.to(device)
 
+      x, y = x.to(device), y.to(device)
       metrics = train(x, y)
+
 
       if xm.is_master_ordinal():
           # only master should log
@@ -205,9 +200,6 @@ def run(config):
       if ((config['sv_log_interval'] > 0) and (not (state_dict['itr'] % config['sv_log_interval']))) and xm.is_master_ordinal():
         train_log.log(itr=int(state_dict['itr']),
                       **{**utils.get_SVs(G, 'G'), **utils.get_SVs(D, 'D')})
-
-      if xm.is_master_ordinal():
-          pbar.set_description(','.join(['itr: %d' % state_dict['itr']] + ['%s : %+4.3f' % (key, metrics[key]) for key in metrics]))
 
       # Save weights and copies as configured at specified interval
       if (not (state_dict['itr'] % config['save_every'])):
@@ -220,21 +212,34 @@ def run(config):
 
       # Test every specified interval
       if (not (state_dict['itr'] % config['test_every'])):
+
+        which_G = G_ema if config['ema'] and config['use_ema'] else G
         if config['G_eval_mode']:
           xm.master_print('Switchin G to eval mode...')
-          G.eval()
+          which_G.eval()
+
+        def G_sample():
+            z, y = sample()
+            return which_G(z, which_G.shared(y))
+
+        model_sample = functools.partial(G_sample)
 
         train_fns.test(G, D, G_ema, sample, state_dict, config, model_sample,
                        get_inception_metrics, experiment_name, test_log)
 
+      #import torch_xla.debug.metrics as met
+      #print(met.metrics_report())
+
+
       if state_dict['itr'] >= config['total_steps']:
           break
+
     pbar.close()
 
 def main(index):
-  xm.master_print(celeba_config)
-  run(celeba_config)
+  xm.master_print(imagenet_config)
+  run(imagenet_config)
 
 
 if __name__ == '__main__':
-  xmp.spawn(main, args=(), nprocs=celeba_config['num_devices'])
+  xmp.spawn(main, args=(), nprocs=imagenet_config['num_devices'])
