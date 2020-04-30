@@ -83,22 +83,19 @@ class SmyrfAttention(nn.Module):
         del Keys
 
         q_rev_positions = torch.argsort(q_positions, dim=-1)
+        q_offset = torch.arange(self.n_hashes * bs, device=queries.device).unsqueeze(-1) * q_seqlen
+        k_offset = torch.arange(self.n_hashes * bs, device=queries.device).unsqueeze(-1) * k_seqlen
+
+
+        q_flat = (q_positions.reshape(-1, q_seqlen) + q_offset).reshape(-1)
+        k_flat = (k_positions.reshape(-1, k_seqlen) + k_offset).reshape(-1)
 
         # sorted queries, keys, values
-        s_queries = queries.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1)\
-                           .gather(2, q_positions.unsqueeze(-1)\
-                           .repeat(1, 1, 1, dim))\
-                           .reshape(-1, self.q_attn_size, dim)
+        s_queries = queries.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1).reshape(-1, dim).index_select(0, q_flat).reshape(-1, self.q_attn_size, dim)
+        s_keys = keys.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1).reshape(-1, dim).index_select(0, k_flat).reshape(-1, self.k_attn_size, dim)
+        s_values = values.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1).reshape(-1, v_dim).index_select(0, k_flat).reshape(-1, self.k_attn_size, v_dim)
 
-        s_keys = keys.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1)\
-                     .gather(2, k_positions.unsqueeze(-1)\
-                     .repeat(1, 1, 1, dim))\
-                     .reshape(-1, self.k_attn_size, dim)
 
-        s_values = values.unsqueeze(0).repeat(self.n_hashes, 1, 1, 1)\
-                         .gather(2, k_positions.unsqueeze(-1)\
-                         .repeat(1, 1, 1, v_dim))\
-                         .reshape(-1, self.k_attn_size, v_dim)
         # free memory
         del q_positions, k_positions
 
@@ -114,7 +111,9 @@ class SmyrfAttention(nn.Module):
         bo = (dots @ s_values).reshape(self.n_hashes, bs, q_seqlen, -1)
 
         # undo sort
-        o = bo.gather(2, q_rev_positions.unsqueeze(-1).repeat(1, 1, 1, v_dim))
+        q_rev_flat = (q_rev_positions.reshape(-1, q_seqlen) + q_offset).reshape(-1)
+        o = bo.reshape(-1, v_dim).index_select(0, q_rev_flat).reshape(self.n_hashes, bs, q_seqlen, -1)
+
         slogits = dots_logsumexp.reshape(self.n_hashes, bs, -1)
         logits = torch.gather(slogits, 2, q_rev_positions)
 
