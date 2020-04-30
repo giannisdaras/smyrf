@@ -187,12 +187,10 @@ def run(config):
       D.train()
       if config['ema']:
         G_ema.train()
-      if config['D_fp16']:
-        x, y = x.to(device).half(), y.to(device)
-      else:
-        x, y = x.to(device), y.to(device)
 
+      x, y = x.to(device), y.to(device)
       metrics = train(x, y)
+
 
       if xm.is_master_ordinal():
           # only master should log
@@ -217,12 +215,14 @@ def run(config):
 
       # Test every specified interval
       if (not (state_dict['itr'] % config['test_every'])):
+
+        which_G = G_ema if config['ema'] and config['use_ema'] else G
         if config['G_eval_mode']:
           xm.master_print('Switchin G to eval mode...')
-          G.eval()
+          which_G.eval()
+
         def G_sample():
             z, y = sample()
-            which_G = G_ema if config['ema'] and config['use_ema'] else G
             return which_G(z, which_G.shared(y))
 
         model_sample = functools.partial(G_sample)
@@ -232,6 +232,7 @@ def run(config):
 
       if state_dict['itr'] >= config['total_steps']:
           break
+
     pbar.close()
 
 def main(index):
