@@ -24,177 +24,6 @@ def get_kmeans_buckets(Queries, Keys, q_cluster_size,
     return q_buckets.argsort(dim=-1), k_buckets.argsort(dim=-1)
 
 
-def get_competitive_matching_buckets(Queries, Keys,
-                                     per_category_cluster_size):
-    # IMPORTANT: for repetitive runs, consider permuting the sequences first
-    # permute sequence
-    # perm_ticker = torch.randperm(N)
-    # perm_keys = keys[perm_ticker]
-    # perm_queries = queries[perm_ticker]
-    # perm_Keys = Keys[perm_ticker]
-    # perm_Queries = Queries[perm_ticker]
-    # q_positions[i] = perm_ticker[q_indices]
-    # k_positions[i] = perm_ticker[k_indices]
-    device = Queries.device
-    from knn_cuda import KNN
-
-    print('Loading kNN')
-    knn = KNN(k=per_category_cluster_size, transpose_mode=True)
-    index = 0
-    q_buckets = []
-    k_buckets = []
-    remaining_queries = set([x for x in range(N)])
-    # find for keys, using as "knowledge" queries.
-    k_q_indices = knn(Queries.unsqueeze(0), Keys.unsqueeze(0))[1][0]
-    # find for queries, using as "knowledge" keys.
-    q_k_indices = knn(Keys.unsqueeze(0), Queries.unsqueeze(0))[1][0]
-    for i in tqdm(range(N)):
-        if len(q_buckets) == N: break
-        if i in remaining_queries:
-            remaining_queries.remove(i)
-            found_keys = [x.item() for x in q_k_indices[i]]
-
-            found_queries = [i]
-            for k_ind in found_keys:
-                matched_queries = [x.item() for x in k_q_indices[k_ind]]
-                for q_ind in matched_queries:
-                    if q_ind in remaining_queries:
-                        found_queries.append(q_ind)
-                        remaining_queries.remove(q_ind)
-                    if len(found_queries) == per_category_cluster_size:
-                        break
-
-                if len(found_queries) == per_category_cluster_size:
-                    break
-
-            while len(found_queries) < per_category_cluster_size:
-                q_ind = random.sample(remaining_queries, 1)[0]
-                remaining_queries.remove(q_ind)
-                found_queries.append(q_ind)
-
-            q_buckets.extend(found_queries)
-            k_buckets.extend(found_keys)
-    q_indices = torch.tensor(q_buckets, device=device)
-    k_indices = torch.tensor(k_buckets, device=device)
-    return q_indices, k_indices
-
-
-
-def get_achlioptas(dim, device='cuda'):
-    arr = torch.empty(dim, dim, device=device)
-    for i in range(dim):
-        for j in range(dim):
-            p = random.random()
-            if p <= 1/6:
-                arr[i][j] = -1
-            elif p <= 2/3:
-                arr[i][j] = 0
-            else:
-                arr[i][j] = 1
-    return arr
-
-
-def pop_many(old_list, indexes):
-    ''' Remove a set of indexes (consistently) from a list '''
-    # Create an empty new list
-    new_list = []
-    # Counter on the indices list
-    j = 0
-
-    for i, x in enumerate(old_list):
-        if j == len(indexes) or i != indexes[j]:
-            new_list.append(x)
-        elif i == indexes[j]:
-            j += 1
-    return new_list
-
-class QItem:
-    def __init__(self, index, q_hash):
-        self.index = index
-        self.q_hash = q_hash
-
-    def __eq__(self, other):
-        return isinstance(other, type(self)), self.index == other.index
-
-    def __hash__(self):
-        return self.q_hash + self.index
-
-    def __str__(self):
-        return 'Q' + str(self.index)
-
-    def __repr__(self):
-        return 'Q' + str(self.index)
-
-
-class KItem:
-    def __init__(self, index, k_hash):
-        self.index = index
-        self.k_hash = k_hash
-
-    def __eq__(self, other):
-        return isinstance(other, type(self)), self.index == other.index
-
-    def __hash__(self):
-        return self.k_hash + self.index
-
-    def __str__(self):
-        return 'K' + str(self.index)
-
-    def __repr__(self):
-        return 'K' + str(self.index)
-
-
-def collect_buckets(q_hashes, k_hashes):
-    '''
-        q_hashes, k_hashes: (N, L) (unique)
-    '''
-    N = q_hashes.shape[0]
-
-    q_buckets = defaultdict(lambda: set())
-    k_buckets = defaultdict(lambda: set())
-
-    for i in tqdm(range(N)):
-        q_h_list = [x.item() for x in q_hashes[i]]
-        k_h_list = [x.item() for x in k_hashes[i]]
-
-        q_set = Counter(q_h_list)
-        k_set = Counter(k_h_list)
-
-        for q_val in q_set.keys():
-            q_item = QItem(i, N)
-            q_buckets[q_val].add(q_item)
-
-
-        for k_val in k_set.keys():
-            k_item = KItem(i, N)
-            k_buckets[k_val].add(k_item)
-
-    to_pop = []
-
-    for key in q_buckets:
-        # only keys
-        if not key in k_buckets:
-            to_pop.append(key)
-
-    for key in k_buckets:
-        if not key in q_buckets:
-            to_pop.append(key)
-
-    for key in to_pop:
-        try:
-            del q_buckets[key]
-        except:
-            pass
-
-        try:
-            del k_buckets[key]
-        except:
-            pass
-
-    return q_buckets, k_buckets
-
-
-
 def random_flip(x):
     flips = torch.ceil((torch.rand(x.shape, device=x.device) - 0.5)).to(torch.uint8)
     return flips * x
@@ -271,11 +100,6 @@ def uniform(a, b, shape, device='cuda'):
     return (b - a) * torch.rand(shape, device=device) + a
 
 
-def batched_index_select(values, indices):
-    last_dim = values.shape[-1]
-    return values.gather(1, indices[:, :, None].expand(-1, -1, last_dim))
-
-
 def max_neg_value(tensor):
     '''
         Returns -infty
@@ -333,7 +157,6 @@ class XBOXPLUS(AsymmetricTransform):
 
         self.k_norms = keys.norm(p=2, dim=-1).unsqueeze(-1)
         self.MK = torch.max(self.k_norms, dim=1).values.unsqueeze(-1)
-
 
     def K(self, x):
         ext = torch.sqrt(self.MQ**2 + self.MK**2 - self.k_norms**2)
