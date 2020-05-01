@@ -60,8 +60,8 @@ class Biggan:
                      strict=False, load_optim=False)
 
         logging.log(logging.INFO, 'Weights loaded...')
-        self.generator.eval()
-        self.discriminator.eval()
+        self.generator.to(self.config['device']).eval()
+        self.discriminator.to(self.config['device']).eval()
         logging.log(logging.INFO, 'Generator and discriminator on eval mode')
 
 
