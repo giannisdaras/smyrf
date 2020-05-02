@@ -207,8 +207,8 @@ imagenet_config = {
 
 
     ## EMA configuration
-    'ema': False,
-    'use_ema': False,
+    'ema': True,
+    'use_ema': True,
     'ema_decay': 0.9999,
     'ema_start': 20000,
     ## Numerical and SV stuff
@@ -235,18 +235,18 @@ imagenet_config = {
     'pbar': 'mine',
     'name_suffix': '',
     # SMYRF configuration
-    'smyrf': False,
+    'smyrf': True,
     'clustering_algo': 'lsh',
     'n_hashes': 8,
-    'q_cluster_size': 1024,
-    'k_cluster_size': 256,
-    'q_attn_size': 1024,
-    'k_attn_size': 256,
+    'q_cluster_size': 256,
+    'k_cluster_size': 64,
+    'q_attn_size': 256,
+    'k_attn_size': 64,
     ## K-means
     'max_iters': 30,
     'progress': False,
     ## LSH
-    'r': 4,
+    'r': 4.0,
     # Checkpointing and testing
     'num_inception_images': 10000,
     'test_every': 999999,
