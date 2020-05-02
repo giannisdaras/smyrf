@@ -172,6 +172,10 @@ def run(config):
   xm.master_print('Beginning training...')
 
   pbar = tqdm(total=config['total_steps'])
+  pbar.n = state_dict['itr']
+  pbar.refresh()
+
+  xm.rendezvous('training_starts')
   while (state_dict['itr'] < config['total_steps']):
     pl_loader = pl.ParallelLoader(loader, [device]).per_device_loader(device)
 
@@ -188,13 +192,10 @@ def run(config):
       if config['ema']:
         G_ema.train()
 
-      x, y = x.to(device), y.to(device)
+      # x, y = x.to(device), y.to(device)
       metrics = train(x, y)
 
-
-      if xm.is_master_ordinal():
-          # only master should log
-          train_log.log(itr=int(state_dict['itr']), **metrics)
+      # train_log.log(itr=int(state_dict['itr']), **metrics)
 
       # Every sv_log_interval, log singular values
       #if ((config['sv_log_interval'] > 0) and (not (state_dict['itr'] % config['sv_log_interval']))) and xm.is_master_ordinal():
