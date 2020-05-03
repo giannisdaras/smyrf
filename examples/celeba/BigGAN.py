@@ -336,7 +336,17 @@ class Discriminator(nn.Module):
                num_D_SVs=1, num_D_SV_itrs=1, D_activation=nn.ReLU(inplace=False),
                D_lr=2e-4, D_B1=0.0, D_B2=0.999, adam_eps=1e-8,
                SN_eps=1e-12, output_dim=1, D_mixed_precision=False, D_fp16=False,
-               D_init='ortho', skip_init=False, D_param='SN', **kwargs):
+               D_init='ortho', skip_init=False, D_param='SN',
+               smyrf=False,
+               n_hashes=8,
+               clustering_algo='lsh',
+               r=1,
+               q_cluster_size=64,
+               k_cluster_size=16,
+               q_attn_size=64,
+               k_attn_size=64,
+               max_iters=10,
+               **kwargs):
     super(Discriminator, self).__init__()
     # Width multiplier
     self.ch = D_ch
@@ -391,8 +401,22 @@ class Discriminator(nn.Module):
       # If attention on this block, attach it to the end
       if self.arch['attention'][self.arch['resolution'][index]]:
         xm.master_print('Adding attention layer in D at resolution %d' % self.arch['resolution'][index])
-        self.blocks[-1] += [layers.Attention(self.arch['out_channels'][index],
-                                             self.which_conv)]
+        if smyrf:
+            xm.master_print('Attention type: SMYRF')
+            self.blocks[-1] += [layers.AttentionApproximation(self.arch['out_channels'][index],
+                                                              n_hashes=n_hashes,
+                                                              clustering_algo=clustering_algo,
+                                                              q_cluster_size=q_cluster_size,
+                                                              k_cluster_size=k_cluster_size,
+                                                              q_attn_size=q_attn_size,
+                                                              k_attn_size=k_attn_size,
+                                                              which_conv=self.which_conv,
+                                                              progress=progress,
+                                                              max_iters=max_iters,
+                                                              r=r)]
+        else:
+            self.blocks[-1] += [layers.Attention(self.arch['out_channels'][index],
+                                                 self.which_conv)]
     # Turn self.blocks into a ModuleList so that it's all properly registered.
     self.blocks = nn.ModuleList([nn.ModuleList(block) for block in self.blocks])
     # Linear output layer. The output dimension is typically 1, but may be
