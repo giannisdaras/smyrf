@@ -109,10 +109,16 @@ def run(config):
                        config['weights_root'], experiment_name,
                        config['load_weights'] if config['load_weights'] else None,
                        G_ema if config['ema'] else None)
+
+  # move everything to TPU
   G.to(device)
   D.to(device)
+  G.optim.params = G.parameters()
+  D.optim.params = D.parameters()
+
   if config['ema']:
     G_ema.to(device)
+
 
   # Consider automatically reducing SN_eps?
   GD = model.G_D(G, D)
