@@ -487,6 +487,11 @@ class G_D(nn.Module):
     # along the batch dimension for improved efficiency.
     else:
       D_input = torch.cat([G_z, x], 0) if x is not None else G_z
+      import torchvision
+      if xm.is_master_ordinal():
+          torchvision.utils.save_image(D_input[:2].float().cpu(), 'd_inp.png',
+                                       nrow=int(D_input.shape[0] **0.5), normalize=True)
+      xm.rendezvous('cont..')
       D_class = torch.cat([gy, dy], 0) if dy is not None else gy
       # Get Discriminator output
       D_out = self.D(D_input, D_class)
