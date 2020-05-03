@@ -111,8 +111,8 @@ def run(config):
                        G_ema if config['ema'] else None)
 
   # move everything to TPU
-  G.to(device)
-  D.to(device)
+  G = G.to(device)
+  D = D.to(device)
   G.optim = optim.Adam(params=G.parameters(), lr=G.lr,
                        betas=(G.B1, G.B2), weight_decay=0,
                        eps=G.adam_eps)
@@ -204,7 +204,8 @@ def run(config):
       if config['ema']:
         G_ema.train()
 
-      # x, y = x.to(device), y.to(device)
+      x, y = x.to(device), y.to(device)
+      xm.rendezvous('data_collection')
       metrics = train(x, y)
 
       # train_log.log(itr=int(state_dict['itr']), **metrics)
