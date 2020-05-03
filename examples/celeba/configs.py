@@ -31,9 +31,9 @@ celeba_config = {
     'norm_style': 'bn',
 
     ## Initialization
-    'seed': 0,
-    'G_init': 'ortho',
-    'D_init': 'ortho',
+    'seed': 11,
+    'G_init': 'xavier',
+    'D_init': 'xavier',
     'skip_init': False,
 
     ## Optimization
