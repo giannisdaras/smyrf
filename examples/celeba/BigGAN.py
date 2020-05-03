@@ -459,6 +459,7 @@ class G_D(nn.Module):
     super(G_D, self).__init__()
     self.G = G
     self.D = D
+    self.counter = 0
 
   def forward(self, z, gy, x=None, dy=None, train_G=False, return_G_z=False,
               split_D=False):
@@ -487,8 +488,9 @@ class G_D(nn.Module):
     # along the batch dimension for improved efficiency.
     else:
       D_input = torch.cat([G_z, x], 0) if x is not None else G_z
+      self.counter += 1
       import torchvision
-      if xm.is_master_ordinal():
+      if xm.is_master_ordinal() and (self.counter % 10 == 0):
           torchvision.utils.save_image(D_input[:2].float().cpu(), 'd_inp.png',
                                        nrow=int(D_input.shape[0] **0.5), normalize=True)
       xm.rendezvous('cont..')
