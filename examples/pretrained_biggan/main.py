@@ -52,11 +52,18 @@ class Biggan:
     def load_pretrained(self):
         state_dict = {'itr': 0, 'epoch': 0, 'save_num': 0, 'save_best_num': 0,
                         'best_IS': 0, 'best_FID': 999999, 'config': self.config}
-        utils.load_weights(None, self.discriminator, state_dict,
+
+        if self.config['ema']:
+            field_a = None
+            field_b = self.generator
+        else:
+            field_a = self.generator
+            field_b = None
+        utils.load_weights(field_a, self.discriminator, state_dict,
                      self.config['weights_root'],
                      self.config['experiment_name'],
                      self.config['load_weights'],
-                     self.generator,
+                     field_b,
                      strict=False, load_optim=False)
 
         logging.log(logging.INFO, 'Weights loaded...')
@@ -105,7 +112,8 @@ if __name__ == '__main__':
         'G_param': 'SN',
         'D_param': 'SN',
         'G_ch': 96,
-        'D_ch': 96, 'G_depth': 1,
+        'D_ch': 96,
+        'G_depth': 1,
         'D_depth': 1,
         'D_wide': True,
         'G_shared': True,
@@ -113,30 +121,17 @@ if __name__ == '__main__':
         'dim_z': 120,
         'z_var': 1.0,
         'hier': True,
-        'cross_replica': False,
         'G_nl': 'inplace_relu',
         'D_nl': 'inplace_relu',
         'G_attn': '64',
         'D_attn': '64',
         'seed': 0,
-        'G_init': 'ortho',
-        'D_init': 'ortho',
         'skip_init': True,
         'batch_size': 1,
-        'G_batch_size': 1,
-        'num_G_accumulations': 8,
-        'num_D_accumulations': 8,
-        'num_epochs': 100,
         'G_fp16': False,
         'D_fp16': False,
         'experiment_name': '138k',
         'ema': True,
-        'num_G_SVs': 1,
-        'num_D_SVs': 1,
-        'num_G_SV_itrs': 1,
-        'num_D_SV_itrs': 1,
-        'G_ortho': 0.0,
-        'D_ortho': 0.0,
         'device': 'cuda',
         'n_classes': 1000,
         'load_weights': '',
