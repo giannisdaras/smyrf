@@ -10,7 +10,9 @@ from tqdm import tqdm
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--weights_root', default='/home/giannis/image2noise/image2noise/biggan_noise/')
+parser.add_argument('--weights_root', default='.')
+parser.add_argument('--experiment_name', default='130k')
+parser.add_argument('--ema', default=False, action="store_true")
 parser.add_argument('--bs', default=1, type=int)
 parser.add_argument('--device', default='cuda')
 parser.add_argument('--seed', type=int)
@@ -130,8 +132,8 @@ if __name__ == '__main__':
         'batch_size': 1,
         'G_fp16': False,
         'D_fp16': False,
-        'experiment_name': '138k',
-        'ema': True,
+        'experiment_name': args.experiment_name,
+        'ema': args.ema,
         'device': 'cuda',
         'n_classes': 1000,
         'load_weights': '',
