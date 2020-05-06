@@ -138,7 +138,6 @@ if __name__ == '__main__':
         'n_classes': 1000,
         'load_weights': '',
         'weights_root': args.weights_root,
-        'experiment_name': '138k',
         'lr': 0.01,
         'optimization_steps': 600,
         # SMYRF configuration
