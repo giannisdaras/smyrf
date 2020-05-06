@@ -114,7 +114,8 @@ def save_and_sample(G, D, G_ema, sample, fixed_z, fixed_y,
     state_dict['save_num'] = (state_dict['save_num'] + 1 ) % config['num_save_copies']
 
   # Use EMA G for samples or non-EMA?
-  which_G = G_ema if config['ema'] and config['use_ema'] else G
+  which_G = G_ema if config['ema'] and config['use_ema'] and (state_dict['itr'] > config['ema_start']) else G
+
 
   # Accumulate standing statistics?
   if config['accumulate_stats']:
