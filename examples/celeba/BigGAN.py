@@ -346,6 +346,7 @@ class Discriminator(nn.Module):
                q_attn_size=64,
                k_attn_size=64,
                max_iters=10,
+               progress=False,
                **kwargs):
     super(Discriminator, self).__init__()
     # Width multiplier
