@@ -1,8 +1,8 @@
 import numpy as np
 import math
 import functools
-
 import torch
+import torchvision
 import torch.nn as nn
 from torch.nn import init
 import torch.optim as optim
@@ -514,11 +514,9 @@ class G_D(nn.Module):
     else:
       D_input = torch.cat([G_z, x], 0) if x is not None else G_z
       self.counter += 1
-      import torchvision
       if xm.is_master_ordinal() and (self.counter % 10 == 0):
-          torchvision.utils.save_image(D_input[:2].float().cpu(), 'd_inp.png',
-                                       nrow=int(D_input.shape[0] **0.5), normalize=True)
-      xm.rendezvous('cont..')
+        torchvision.utils.save_image(D_input[:2].float().cpu(), 'd_inp.png',
+                                   nrow=int(D_input.shape[0] **0.5), normalize=True)
       D_class = torch.cat([gy, dy], 0) if dy is not None else gy
       # Get Discriminator output
       D_out = self.D(D_input, D_class)
