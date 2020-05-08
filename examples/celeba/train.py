@@ -183,9 +183,10 @@ def run(config):
 
   xm.master_print('Beginning training...')
 
-  pbar = tqdm(total=config['total_steps'])
-  pbar.n = state_dict['itr']
-  pbar.refresh()
+  if xm.is_master_ordinal():
+    pbar = tqdm(total=config['total_steps'])
+    pbar.n = state_dict['itr']
+    pbar.refresh()
 
   xm.rendezvous('training_starts')
   while (state_dict['itr'] < config['total_steps']):
@@ -204,7 +205,6 @@ def run(config):
       if config['ema']:
         G_ema.train()
 
-      x, y = x.to(device), y.to(device)
       xm.rendezvous('data_collection')
       metrics = train(x, y)
 
@@ -236,15 +236,11 @@ def run(config):
             z, y = sample()
             return which_G(z, which_G.shared(y))
 
-        model_sample = functools.partial(G_sample)
-
-        train_fns.test(G, D, G_ema, sample, state_dict, config, model_sample,
+        train_fns.test(G, D, G_ema, sample, state_dict, config, G_sample,
                        get_inception_metrics, experiment_name, test_log)
 
       if state_dict['itr'] >= config['total_steps']:
           break
-
-    pbar.close()
 
 def main(index):
   xm.master_print(celeba_config)
