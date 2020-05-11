@@ -119,8 +119,6 @@ def run(config):
   D.optim = optim.Adam(params=D.parameters(), lr=D.lr,
                        betas=(D.B1, D.B2), weight_decay=0,
                        eps=D.adam_eps)
-  # G.optim.params = G.parameters()
-  # D.optim.params = D.parameters()
 
   if config['ema']:
     G_ema.to(device)
