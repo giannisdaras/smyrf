@@ -71,8 +71,8 @@ celeba_config = {
 
 
     ## EMA configuration
-    'ema': True,
-    'use_ema': True,
+    'ema': False,
+    'use_ema': False,
     'ema_decay': 0.9999,
     'ema_start': 20000,
     ## Numerical and SV stuff
@@ -206,8 +206,8 @@ imagenet_config = {
 
 
     ## EMA configuration
-    'ema': True,
-    'use_ema': True,
+    'ema': False,
+    'use_ema': False,
     'ema_decay': 0.9999,
     'ema_start': 20000,
     ## Numerical and SV stuff
