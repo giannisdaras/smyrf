@@ -84,8 +84,8 @@ def run(config):
     xm.master_print('Preparing EMA for G with decay of {}'.format(config['ema_decay']))
     G_ema = model.Generator(**{**config, 'skip_init':True,
                                'no_optim': True})
-    ema = utils.ema(G, G_ema, config['ema_decay'], config['ema_start'])
   else:
+    xm.master_print('Not using ema...')
     G_ema, ema = None, None
 
   # FP16?
@@ -113,16 +113,19 @@ def run(config):
   # move everything to TPU
   G = G.to(device)
   D = D.to(device)
-  G.optim = optim.Adam(params=G.parameters(), lr=G.lr,
-                       betas=(G.B1, G.B2), weight_decay=0,
-                       eps=G.adam_eps)
-  D.optim = optim.Adam(params=D.parameters(), lr=D.lr,
-                       betas=(D.B1, D.B2), weight_decay=0,
-                       eps=D.adam_eps)
+
+  for key, val in G.optim.state.items():
+    G.optim.state[key]['exp_avg'] = G.optim.state[key]['exp_avg'].to(device)
+    G.optim.state[key]['exp_avg_sq'] = G.optim.state[key]['exp_avg_sq'].to(device)
+
+  for key, val in D.optim.state.items():
+    D.optim.state[key]['exp_avg'] = D.optim.state[key]['exp_avg'].to(device)
+    D.optim.state[key]['exp_avg_sq'] = D.optim.state[key]['exp_avg_sq'].to(device)
+
 
   if config['ema']:
-    G_ema.to(device)
-
+    G_ema = G_ema.to(device)
+    ema = utils.ema(G, G_ema, config['ema_decay'], config['ema_start'])
 
   # Consider automatically reducing SN_eps?
   GD = model.G_D(G, D)
