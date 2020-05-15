@@ -10,10 +10,13 @@ celeba_config = {
 
     ## Model
     'model': 'BigGAN',
+    'G_attn': '128',
+    'D_attn': '128',
+
     'G_param': 'SN',
     'D_param': 'SN',
-    'G_ch': 64,
-    'D_ch': 64,
+    'G_ch': 96,
+    'D_ch': 96,
     'G_depth': 1,
     'D_depth': 1,
     'D_wide': True,
@@ -25,25 +28,23 @@ celeba_config = {
     'cross_replica': False,
     'G_nl': 'inplace_relu',
     'D_nl': 'inplace_relu',
-    'G_attn': '64',
-    'D_attn': '64',
     'mybn': False,
     'norm_style': 'bn',
 
     ## Initialization
     'seed': 11,
-    'G_init': 'xavier',
-    'D_init': 'xavier',
+    'G_init': 'ortho',
+    'D_init': 'ortho',
     'skip_init': False,
 
     ## Optimization
-    'batch_size': 64,
+    'batch_size': 4,
     'G_batch_size': 0,
     'num_G_accumulations': 1,
     'num_D_accumulations': 1,
-    'num_D_steps': 1,
-    'G_lr': 1e-4,
-    'D_lr': 4e-4,
+    'num_D_steps': 2,
+    'G_lr': 5e-5,
+    'D_lr': 2e-4,
     'G_B1': 0.,
     'D_B1': 0.,
     'G_B2': 0.999,
@@ -100,13 +101,13 @@ celeba_config = {
     'name_suffix': '',
 
     # SMYRF configuration
-    'smyrf': False,
+    'smyrf': True,
     'clustering_algo': 'lsh',
-    'n_hashes': 8,
-    'q_cluster_size': 1024,
-    'k_cluster_size': 256,
-    'q_attn_size': 1024,
-    'k_attn_size': 256,
+    'n_hashes': 4,
+    'q_cluster_size': 2048,
+    'k_cluster_size': 512,
+    'q_attn_size': 2048,
+    'k_attn_size': 512,
     ## K-means
     'max_iters': 30,
     'progress': False,
