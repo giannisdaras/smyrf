@@ -6,7 +6,7 @@ class AlbertConfig:
     cache_dir = None
     task_name = 'sst-2'
     data_dir = 'glue_data/SST-2'
-    max_seq_length = 128
+    max_seq_length = 64
     overwrite_cache = False
     output_dir = './'
     overwrite_output_dir = True
