@@ -43,7 +43,8 @@ class SmyrfAttention(nn.Module):
             raise NotImplementedError('Uknown clustering algorithm')
 
 
-    def forward(self, queries, keys, values, attn_mask=None, progress=False):
+    def forward(self, queries, keys, values, attn_mask=None, progress=False,
+                norm_factor=1):
         bs, q_seqlen, dim = queries.shape
         bs, k_seqlen, dim = keys.shape
         v_dim = values.shape[-1]
@@ -89,6 +90,8 @@ class SmyrfAttention(nn.Module):
         del q_positions, k_positions
 
         inner = s_queries @ s_keys.transpose(2, 1)
+        inner = inner / norm_factor
+        
         # softmax denominator
         dots_logsumexp = torch.logsumexp(inner, dim=-1, keepdim=True)
         # softmax
