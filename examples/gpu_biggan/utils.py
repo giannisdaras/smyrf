@@ -568,8 +568,7 @@ def get_data_loaders(dataset, data_root=None, augment=False, batch_size=64,
     train_transform = transforms.Compose(train_transform + [
                      transforms.ToTensor(),
                      transforms.Normalize(norm_mean, norm_std)])
-  train_set = which_dataset(root=data_root, transform=train_transform,
-                            load_in_mem=load_in_mem, **dataset_kwargs)
+  train_set = which_dataset(data_root, train_transform)
 
   # Prepare loader; the loaders list is for forward compatibility with
   # using validation / test splits.
