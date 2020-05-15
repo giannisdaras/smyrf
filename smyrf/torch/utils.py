@@ -5,23 +5,6 @@ from collections import defaultdict, Counter
 import numpy as np
 from tqdm import tqdm
 import random
-from balanced_kmeans import kmeans_equal
-
-def get_kmeans_buckets(Queries, Keys, q_cluster_size,
-                       k_cluster_size, max_iters=None,
-                       progress=False):
-    num_clusters = Queries.shape[1] // q_cluster_size
-    assert num_clusters == (Keys.shape[1] // k_cluster_size), 'Unequal number of clusters for queries and keys.'
-
-    q_buckets, q_centers = kmeans_equal(Queries, num_clusters=num_clusters,
-                                        cluster_size=q_cluster_size,
-                                        max_iters=max_iters,
-                                        progress=progress)
-
-    k_buckets, _ = kmeans_equal(Keys, num_clusters=num_clusters, cluster_size=k_cluster_size,
-                 initial_state=q_centers, update_centers=False)
-
-    return q_buckets.argsort(dim=-1), k_buckets.argsort(dim=-1)
 
 
 def random_flip(x):
@@ -241,31 +224,40 @@ class CrossPolytopeLSH(LSH):
         indices = torch.argmax(x, dim=-1).permute(2, 0, 1)
         return indices
 
+
+def lsh_clustering(queries, keys, n_hashes, r=1):
+    """
+        LSH clustering based on Euclidean distance.
+    """
+    e2lsh = E2LSH(n_hashes=n_hashes, dim=queries.shape[-1], r=r, device=queries.device)
+
+    queries_indices = e2lsh(queries).reshape((n_hashes,) + queries.shape[:-1]).argsort(dim=-1)
+    keys_indices = e2lsh(keys).reshape((n_hashes,) + keys.shape[:-1]).argsort(dim=-1)
+    return queries_indices, keys_indices
+
+
 class E2LSH(LSH):
-    def __init__(self, L, K, dim, r=9, device='cuda'):
+    def __init__(self, n_hashes, dim, r, device='cuda'):
         super(E2LSH, self).__init__()
-        self.alpha = torch.normal(0, 1, (dim, L * K), device=device)
-        self.beta = uniform(0, r, shape=(L * K,), device=device)
-        self.L = L
-        self.K = K
+        self.alpha = torch.normal(0, 1, (dim, n_hashes), device=device)
+        self.beta = uniform(0, r, shape=(1, n_hashes), device=device)
         self.dim = dim
         self.r = r
 
-    @two_dimensional
     def __call__(self, vecs):
         '''
             L2 Sensitive Hashing based on p-stable distributions.
             Also known as E2LSH.
-
             Args:
-                vecs: (bs * N, dim) (dtype: torch.float32)
+                vecs: (bs, N, dim) (dtype: torch.float32)
             Output:
-                buckets: (bs * N, n_hashes) (dtype: torch.int32)
+                buckets: (n_hashes, bs, N) (dtype: torch.int32)
         '''
         projection = vecs @ self.alpha
         projection_shift = projection + self.beta
-        projection_shift_rescale = projection_shift / self.r
-        return projection_shift_rescale.to(torch.long).reshape(-1, self.L, self.K)
+        projection_rescale = projection_shift / self.r
+        return projection_shift.permute(2, 0, 1)
+
 
 
 class QLSH(LSH):
