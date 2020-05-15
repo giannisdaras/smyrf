@@ -6,7 +6,7 @@ from torch.autograd import Function
 from functools import partial, reduce
 from itertools import chain
 from smyrf.torch.utils import *
-from balanced_kmeans import kmeans_equal, lsh_clustering
+
 
 class SmyrfAttention(nn.Module):
     def __init__(self, n_hashes, q_cluster_size, k_cluster_size,
@@ -39,12 +39,6 @@ class SmyrfAttention(nn.Module):
                 'r': r,
                 'n_hashes': self.n_hashes
             }
-        elif clustering_algo == 'kmeans_equal':
-            self.clustering_params = {
-                'max_iters' : max_iters,
-                'q_cluster_size' : q_cluster_size,
-                'k_cluster_size': k_cluster_size
-            }
         else:
             raise NotImplementedError('Uknown clustering algorithm')
 
@@ -66,14 +60,9 @@ class SmyrfAttention(nn.Module):
             assert num_clusters == (Keys.shape[1] // self.k_attn_size), 'Unequal number of clusters for queries and keys.'
 
             if self.clustering_algo == 'lsh':
-                q_positions = lsh_clustering(Queries, **self.clustering_params)
-                k_positions = lsh_clustering(Keys, **self.clustering_params)
-            elif self.clustering_algo == 'kmeans_equal':
-                Queries = Queries.repeat(self.n_hashes, 1, 1)
-                Keys = Keys.repeat(self.n_hashes, 1, 1)
-                q_positions, k_positions = get_kmeans_buckets(Queries,
-                                                              Keys,
-                                                              **self.clustering_params)
+                q_positions, k_positions = lsh_clustering(Queries, Keys, **self.clustering_params)
+            else:
+                raise NotImplementdError('This algorithm is not supported')
 
             q_positions = q_positions.reshape(self.n_hashes, bs, -1)
             k_positions = k_positions.reshape(self.n_hashes, bs, -1)
