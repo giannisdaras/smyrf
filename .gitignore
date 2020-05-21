@@ -132,3 +132,7 @@ dmypy.json
 examples/celeba/CelebAMask-HQ
 examples/nlp/glue_data
 *.npz
+examples/celeba/weights/*
+examples/gpu_biggan/samples/
+examples/gpu_biggan/100k/
+examples/gpu_biggan/checkpoints/
