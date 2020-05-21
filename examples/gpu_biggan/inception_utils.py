@@ -303,11 +303,7 @@ def prepare_inception_metrics(dataset, parallel, no_fid=False):
       else:
         mu, sigma = np.mean(pool.cpu().numpy(), axis=0), np.cov(pool.cpu().numpy(), rowvar=False)
         logging.log(logging.INFO, 'Covariances calculated, getting FID...')
-      if use_torch:
-        FID = torch_calculate_frechet_distance(mu, sigma, torch.tensor(data_mu).float().cuda(), torch.tensor(data_sigma).float().cuda())
-        FID = float(FID.cpu().numpy())
-      else:
-        FID = numpy_calculate_frechet_distance(mu.cpu().numpy(), sigma.cpu().numpy(), data_mu, data_sigma)
+      FID = numpy_calculate_frechet_distance(mu.cpu().numpy(), sigma.cpu().numpy(), data_mu, data_sigma)
     # Delete mu, sigma, pool, logits just in case
     del mu, sigma, pool, logits
     return IS_mean, IS_std, FID
