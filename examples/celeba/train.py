@@ -114,13 +114,21 @@ def run(config):
   G = G.to(device)
   D = D.to(device)
 
-  for key, val in G.optim.state.items():
-    G.optim.state[key]['exp_avg'] = G.optim.state[key]['exp_avg'].to(device)
-    G.optim.state[key]['exp_avg_sq'] = G.optim.state[key]['exp_avg_sq'].to(device)
+  G.optim = optim.Adam(params=G.parameters(), lr=G.lr,
+                       betas=(G.B1, G.B2), weight_decay=0,
+                       eps=G.adam_eps)
+  D.optim = optim.Adam(params=D.parameters(), lr=D.lr,
+                       betas=(D.B1, D.B2), weight_decay=0,
+                       eps=D.adam_eps)
 
-  for key, val in D.optim.state.items():
-    D.optim.state[key]['exp_avg'] = D.optim.state[key]['exp_avg'].to(device)
-    D.optim.state[key]['exp_avg_sq'] = D.optim.state[key]['exp_avg_sq'].to(device)
+
+  #for key, val in G.optim.state.items():
+  #  G.optim.state[key]['exp_avg'] = G.optim.state[key]['exp_avg'].to(device)
+  #  G.optim.state[key]['exp_avg_sq'] = G.optim.state[key]['exp_avg_sq'].to(device)
+
+  #for key, val in D.optim.state.items():
+  #  D.optim.state[key]['exp_avg'] = D.optim.state[key]['exp_avg'].to(device)
+  #  D.optim.state[key]['exp_avg_sq'] = D.optim.state[key]['exp_avg_sq'].to(device)
 
 
   if config['ema']:
