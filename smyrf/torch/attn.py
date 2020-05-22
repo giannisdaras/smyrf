@@ -86,11 +86,15 @@ class SmyrfAttention(nn.Module):
         s_values = values.reshape(-1, v_dim).index_select(0, k_flat).reshape(-1, self.k_attn_size, v_dim)
 
 
-        # free memory
-        del q_positions, k_positions
-
         inner = s_queries @ s_keys.transpose(2, 1)
         inner = inner / norm_factor
+        if attn_mask is not None:
+            # repeat for heads (if they exist)
+            attn_mask = attn_mask.unsqueeze(0).repeat(self.n_hashes, queries.shape[0] // attn_mask.shape[0], 1).reshape(-1)[k_flat].reshape(-1, self.k_attn_size)
+            inner = (attn_mask.unsqueeze(1) + inner)
+
+        # free memory
+        del q_positions, k_positions
 
         # softmax denominator
         dots_logsumexp = torch.logsumexp(inner, dim=-1, keepdim=True)
