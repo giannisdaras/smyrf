@@ -4,8 +4,8 @@ class AlbertConfig:
     config_name = None
     tokenizer_name = None
     cache_dir = None
-    task_name = 'sst-2'
-    data_dir = 'glue_data/SST-2'
+    task_name = 'imdb'
+    data_dir = 'glue_data/'
     max_seq_length = 64
     overwrite_cache = False
     output_dir = './'
@@ -35,7 +35,7 @@ class AlbertConfig:
     max_steps = -1
     # SMYRF configuration
     smyrf =  True
-    n_hashes = 8
+    n_hashes = 4
     k_cluster_size = 8
     q_cluster_size = 8
     r = 4
