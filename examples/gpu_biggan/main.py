@@ -6,8 +6,8 @@ import utils
 import inception_utils
 from categories import indx2category
 import torch
-from tqdm import tqdm
-
+from tqdm import tqdm, trange
+import numpy as np
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--weights_root', default='.')
@@ -34,6 +34,8 @@ parser.add_argument('--do_sample', default=False, action='store_true')
 parser.add_argument('--sample_iters', default=1, type=int)
 parser.add_argument('--do_metrics', default=False, action='store_true')
 parser.add_argument('--disable_smyrf', action='store_true', default=False)
+parser.add_argument('--do_npz', default=False, action='store_true')
+
 
 # metrics configuration
 parser.add_argument('--dataset', default='I128_hdf5',
@@ -197,3 +199,24 @@ if __name__ == '__main__':
             print(outstring)
 
         get_metrics()
+
+    if args.do_npz:
+        logging.log(logging.INFO, 'Doing npz for OFFICIAL scores...')
+        x, y = [], []
+
+        def sample():
+            images, labels = biggan.sample(biggan.get_random_inputs(bs=args.bs))
+            return images, labels
+
+        for i in trange(int(np.ceil(config['num_inception_images'] / float(args.bs)))):
+            with torch.no_grad():
+                images, labels = sample()
+                x.append(np.uint8(255 * (images.cpu().numpy() + 1) / 2.))
+                y.append(labels.cpu().numpy())
+
+        x = np.concatenate(x, 0)[:config['num_inception_images']]
+        y = np.concatenate(y, 0)[:config['num_inception_images']]
+        print('Images shape: %s, Labels shape: %s' % (x.shape, y.shape))
+        npz_filename = 'samples.npz'
+        print('Saving npz to %s...' % npz_filename)
+        np.savez(npz_filename, **{'x' : x, 'y' : y})
