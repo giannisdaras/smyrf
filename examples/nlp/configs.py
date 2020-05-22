@@ -5,8 +5,8 @@ class AlbertConfig:
     tokenizer_name = None
     cache_dir = None
     task_name = 'imdb'
-    data_dir = 'glue_data/'
-    max_seq_length = 64
+    data_dir = ''
+    max_seq_length = 128
     overwrite_cache = False
     output_dir = './'
     overwrite_output_dir = True
