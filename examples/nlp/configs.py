@@ -1,6 +1,4 @@
-class AlbertConfig:
-    model_type = 'albert'
-    model_name_or_path = 'albert-base-v2'
+class BaseConfig:
     config_name = None
     tokenizer_name = None
     cache_dir = None
@@ -14,8 +12,8 @@ class AlbertConfig:
     do_eval = True
     evaluate_during_training = False
     # Optimization
-    per_gpu_train_batch_size = 8
-    per_gpu_eval_batch_size = 8
+    per_gpu_train_batch_size = 2
+    per_gpu_eval_batch_size = 2
     gradient_accumulation_steps = 1
     learning_rate = 1e-4
     weight_decay = 0.0
@@ -35,7 +33,16 @@ class AlbertConfig:
     max_steps = -1
     # SMYRF configuration
     smyrf =  True
-    n_hashes = 4
-    k_cluster_size = 8
-    q_cluster_size = 8
+    n_hashes = 1
+    k_cluster_size = 64
+    q_cluster_size = 64
     r = 4
+
+class AlbertConfig(BaseConfig):
+    model_type = 'albert'
+    model_name_or_path = 'albert-base-v2'
+
+
+class BertBaseConfig(BaseConfig):
+    model_type = 'bert'
+    model_name_or_path = 'bert-base-uncased'

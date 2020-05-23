@@ -54,7 +54,8 @@ try:
 except ImportError:
     from tensorboardX import SummaryWriter
 
-from configs import AlbertConfig
+from configs import BertBaseConfig, AlbertConfig
+from argparse import ArgumentParser
 
 logger = logging.getLogger(__name__)
 
@@ -426,7 +427,16 @@ class DataProcessingArguments:
 
 
 def main():
-    args = AlbertConfig()
+    configs = {
+        'albert': AlbertConfig,
+        'bert-base': BertBaseConfig
+    }
+    parser = ArgumentParser()
+    parser.add_argument('--config', default='bert-base')
+    cli_args = parser.parse_args()
+
+
+    args = configs[cli_args.config]
     if (
         os.path.exists(args.output_dir)
         and os.listdir(args.output_dir)
