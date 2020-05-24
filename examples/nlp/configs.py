@@ -12,17 +12,17 @@ class BaseConfig:
     do_eval = True
     evaluate_during_training = False
     # Optimization
-    per_gpu_train_batch_size = 2
-    per_gpu_eval_batch_size = 2
+    per_gpu_train_batch_size = 8
+    per_gpu_eval_batch_size = 8
     gradient_accumulation_steps = 1
-    learning_rate = 1e-4
+    learning_rate = 3e-5
     weight_decay = 0.0
     adam_epsilon = 1e-8
     max_grad_norm = 1.0
-    num_train_epochs = 10
+    num_train_epochs = 3
     warmup_steps = 0
     logging_steps = 500
-    save_steps = 500
+    save_steps = 1000
     save_total_limit = None
     eval_all_checkpoints = False
     no_cuda = False
