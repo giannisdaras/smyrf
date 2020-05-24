@@ -30,7 +30,7 @@ class BoolQProcessor:
         self.counter = 0
 
     def get_labels(self):
-        return ['True', 'False']
+        return [True, False]
 
     def get_dev_examples(self, *args, **kwargs):
         examples = []
