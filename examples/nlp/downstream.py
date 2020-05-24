@@ -336,8 +336,7 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
     if args.local_rank not in [-1, 0] and not evaluate:
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
 
-    # processor = processors[task]()
-    processor = data_utils.ImdbProcessor()
+    processor = processors[task]()
 
     output_mode = output_modes[task]
     # Load data features from cache or dataset file
@@ -479,7 +478,7 @@ def main():
     # Prepare GLUE task
     args.task_name = args.task_name.lower()
 
-    processors['imdb'] = data_utils.ImdbProcessor()
+    processors['imdb'] = data_utils.ImdbProcessor
     output_modes['imdb'] = 'classification'
 
     if args.task_name not in processors:
