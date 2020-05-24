@@ -480,6 +480,8 @@ def main():
 
     processors['imdb'] = data_utils.ImdbProcessor
     output_modes['imdb'] = 'classification'
+    processors['boolq'] = data_utils.BoolQProcessor
+    output_modes['boolq'] = 'classification'
 
     if args.task_name not in processors:
         raise ValueError("Task not found: %s" % (args.task_name))
