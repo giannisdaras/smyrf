@@ -46,3 +46,8 @@ class AlbertConfig(BaseConfig):
 class BertBaseConfig(BaseConfig):
     model_type = 'bert'
     model_name_or_path = 'bert-base-uncased'
+
+
+class BertLargeConfig(BaseConfig):
+    model_type = 'bert'
+    model_name_or_path = 'bert-large-uncased'
