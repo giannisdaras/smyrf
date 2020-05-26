@@ -663,6 +663,12 @@ def main():
     parser.add_argument("--server_port", type=str, default="", help="Can be used for distant debugging.")
 
     parser.add_argument("--threads", type=int, default=1, help="multiple threads for converting example to features")
+    parser.add_argument('--smyrf', default=False, action='store_true')
+    parser.add_argument('--n_hashes', default=1, type=int)
+    parser.add_argument('--q_cluster_size', default=8, type=int)
+    parser.add_argument('--k_cluster_size', default=8, type=int)
+
+
     args = parser.parse_args()
 
     if args.doc_stride >= args.max_seq_length - args.max_query_length:
@@ -732,6 +738,12 @@ def main():
         args.config_name if args.config_name else args.model_name_or_path,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
+    config.smyrf = args.smyrf
+    config.n_hashes = args.n_hashes
+    config.q_cluster_size = args.q_cluster_size
+    config.k_cluster_size = args.k_cluster_size
+    config.r = 1
+
     tokenizer = AutoTokenizer.from_pretrained(
         args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
         do_lower_case=args.do_lower_case,
