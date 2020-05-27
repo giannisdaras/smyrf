@@ -51,6 +51,15 @@ class SmyrfAttention(nn.Module):
         assert queries.device == keys.device, 'Queries, keys in different devices'
         device = queries.device
 
+
+        # prepare mask if not None
+        if attn_mask is not None:
+            # We expect first dimension to be batch_size and second dimension seq. length
+            if len(attn_mask.shape) == 1:
+                attn_mask = attn_mask.unsqueeze(0)
+            # repeat for n_hashes, heads
+            attn_mask = attn_mask.unsqueeze(0).repeat(self.n_hashes, queries.shape[0] // attn_mask.shape[0], 1)
+
         with torch.no_grad():
             # XBOX+ transform
             self.xbox_plus.set_norms(queries, keys)
@@ -60,8 +69,9 @@ class SmyrfAttention(nn.Module):
             num_clusters = Queries.shape[1] // self.q_attn_size
             assert num_clusters == (Keys.shape[1] // self.k_attn_size), 'Unequal number of clusters for queries and keys.'
 
+
             if self.clustering_algo == 'lsh':
-                q_positions, k_positions = lsh_clustering(Queries, Keys, **self.clustering_params)
+                q_positions, k_positions = lsh_clustering(Queries, Keys, **self.clustering_params, attn_mask=attn_mask)
             else:
                 raise NotImplementdError('This algorithm is not supported')
 
@@ -71,6 +81,7 @@ class SmyrfAttention(nn.Module):
         # free memory
         del Queries
         del Keys
+
 
         q_rev_positions = torch.argsort(q_positions, dim=-1)
         q_offset = torch.arange(bs, device=queries.device).unsqueeze(-1) * q_seqlen
@@ -85,17 +96,11 @@ class SmyrfAttention(nn.Module):
         s_keys = keys.reshape(-1, dim).index_select(0, k_flat).reshape(-1, self.k_attn_size, dim)
         s_values = values.reshape(-1, v_dim).index_select(0, k_flat).reshape(-1, self.k_attn_size, v_dim)
 
-
         inner = s_queries @ s_keys.transpose(2, 1)
         inner = inner / norm_factor
-        if attn_mask is not None:
-            # We expect first dimension to be batch_size and second dimension seq. length
-            if len(attn_mask.shape) == 1:
-                attn_mask = attn_mask.unsqueeze(0)
 
-            # repeat for n_hashes, heads
-            attn_mask = attn_mask.unsqueeze(0).repeat(self.n_hashes, queries.shape[0] // attn_mask.shape[0], 1).reshape(-1)[k_flat].reshape(-1, self.k_attn_size)
-            inner = (attn_mask.unsqueeze(1) + inner)
+        # mask out attention to padded tokens
+        inner = (attn_mask.reshape(-1)[k_flat].reshape(-1, self.k_attn_size).unsqueeze(1) + inner)
 
         # free memory
         del q_positions, k_positions

@@ -225,14 +225,15 @@ class CrossPolytopeLSH(LSH):
         return indices
 
 
-def lsh_clustering(queries, keys, n_hashes, r=1):
+
+def lsh_clustering(queries, keys, n_hashes, r=1, attn_mask=None):
     """
         LSH clustering based on Euclidean distance.
     """
-    e2lsh = E2LSH(n_hashes=n_hashes, dim=queries.shape[-1], r=r, device=queries.device)
 
-    queries_indices = e2lsh(queries).reshape((n_hashes,) + queries.shape[:-1]).argsort(dim=-1)
-    keys_indices = e2lsh(keys).reshape((n_hashes,) + keys.shape[:-1]).argsort(dim=-1)
+    e2lsh = E2LSH(n_hashes=n_hashes, dim=queries.shape[-1], r=r, device=queries.device)
+    queries_indices = (e2lsh(queries).reshape((n_hashes,) + queries.shape[:-1]) - attn_mask).argsort(dim=-1)
+    keys_indices = (e2lsh(keys).reshape((n_hashes,) + keys.shape[:-1]) - attn_mask).argsort(dim=-1)
     return queries_indices, keys_indices
 
 
