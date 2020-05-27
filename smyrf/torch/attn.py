@@ -100,7 +100,8 @@ class SmyrfAttention(nn.Module):
         inner = inner / norm_factor
 
         # mask out attention to padded tokens
-        inner = (attn_mask.reshape(-1)[k_flat].reshape(-1, self.k_attn_size).unsqueeze(1) + inner)
+        if attn_mask is not None:
+            inner = (attn_mask.reshape(-1)[k_flat].reshape(-1, self.k_attn_size).unsqueeze(1) + inner)
 
         # free memory
         del q_positions, k_positions
