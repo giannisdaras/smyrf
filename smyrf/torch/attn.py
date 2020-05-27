@@ -89,7 +89,11 @@ class SmyrfAttention(nn.Module):
         inner = s_queries @ s_keys.transpose(2, 1)
         inner = inner / norm_factor
         if attn_mask is not None:
-            # repeat for heads (if they exist)
+            # We expect first dimension to be batch_size and second dimension seq. length
+            if len(attn_mask.shape) == 1:
+                attn_mask = attn_mask.unsqueeze(0)
+
+            # repeat for n_hashes, heads
             attn_mask = attn_mask.unsqueeze(0).repeat(self.n_hashes, queries.shape[0] // attn_mask.shape[0], 1).reshape(-1)[k_flat].reshape(-1, self.k_attn_size)
             inner = (attn_mask.unsqueeze(1) + inner)
 
