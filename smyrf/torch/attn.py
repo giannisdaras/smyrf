@@ -44,7 +44,7 @@ class SmyrfAttention(nn.Module):
 
 
     def forward(self, queries, keys, values, attn_mask=None, progress=False,
-                norm_factor=1):
+                norm_factor=1, return_attn_map=False):
         bs, q_seqlen, dim = queries.shape
         bs, k_seqlen, dim = keys.shape
         v_dim = values.shape[-1]
@@ -104,7 +104,8 @@ class SmyrfAttention(nn.Module):
             inner = (attn_mask.reshape(-1)[k_flat].reshape(-1, self.k_attn_size).unsqueeze(1) + inner)
 
         # free memory
-        del q_positions, k_positions
+        if not return_attn_map:
+            del q_positions, k_positions
 
         # softmax denominator
         dots_logsumexp = torch.logsumexp(inner, dim=-1, keepdim=True)
@@ -130,7 +131,10 @@ class SmyrfAttention(nn.Module):
         probs = torch.exp(logits - torch.logsumexp(logits, dim=0, keepdim=True))
         out = torch.sum(o * probs.unsqueeze(-1), dim=0)
 
-        return out
+        if return_attn_map:
+            return out, (q_positions, k_positions)
+        else:
+            return out
 
 
 
