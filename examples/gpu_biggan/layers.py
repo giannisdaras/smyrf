@@ -155,7 +155,7 @@ class Attention(nn.Module):
     self.gamma = P(torch.tensor(0.), requires_grad=True)
 
 
-  def forward(self, x, y=None):
+  def forward(self, x, y=None, return_attn_map=False):
     # Apply convs
     theta = self.theta(x)
     phi = F.max_pool2d(self.phi(x), [2,2])
@@ -168,7 +168,11 @@ class Attention(nn.Module):
     beta = F.softmax(torch.bmm(theta.transpose(1, 2), phi), -1)
     # Attention map times g path
     o = self.o(torch.bmm(g, beta.transpose(1,2)).view(-1, self.ch // 2, x.shape[2], x.shape[3]))
-    return self.gamma * o + x
+
+    if not return_attn_map:
+        return self.gamma * o + x
+    else:
+        return self.gamma * o + x, beta
 
 
 class AttentionApproximation(nn.Module):
@@ -204,7 +208,7 @@ class AttentionApproximation(nn.Module):
                                  r=r)
      self.progress = progress
 
-  def forward(self, x, y=None):
+  def forward(self, x, y=None, return_attn_map=False):
     # Apply convs
     queries = self.theta(x)
     keys = F.max_pool2d(self.phi(x), [2,2])
@@ -214,10 +218,19 @@ class AttentionApproximation(nn.Module):
     queries = queries.view(-1, self. ch // 8, x.shape[2] * x.shape[3]).transpose(-2, -1)
     keys = keys.view(-1, self. ch // 8, x.shape[2] * x.shape[3] // 4).transpose(-2, -1)
     values = values.view(-1, self. ch // 2, x.shape[2] * x.shape[3] // 4).transpose(-2, -1)
-    out = self.smyrf(queries, keys, values, progress=self.progress).transpose(-2, -1)
-    o = self.o(out.reshape(x.shape[0], -1, x.shape[2], x.shape[3]))
-    return self.gamma * o + x
 
+    if not return_attn_map:
+        out = self.smyrf(queries, keys, values, progress=self.progress).transpose(-2, -1)
+    else:
+        out, attn_map = self.smyrf(queries, keys, values, progress=self.progress, return_attn_map=True)
+        out = out.transpose(-2, -1)
+
+    o = self.o(out.reshape(x.shape[0], -1, x.shape[2], x.shape[3]))
+
+    if not return_attn_map:
+        return self.gamma * o + x
+    else:
+        return self.gamma * o + x, attn_map
 
 
 # Fused batchnorm op

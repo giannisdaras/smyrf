@@ -72,8 +72,10 @@ class Generator(nn.Module):
                k_attn_size=64,
                max_iters=10,
                progress=False,
+               return_attn_map=False,
                **kwargs):
     super(Generator, self).__init__()
+    self.return_attn_map = return_attn_map
     # Channel width mulitplier
     self.ch = G_ch
     # Dimensionality of the latent space
@@ -269,11 +271,17 @@ class Generator(nn.Module):
     for index, blocklist in enumerate(self.blocks):
       # Second inner loop in case block has multiple layers
       for block in blocklist:
-        h = block(h, ys[index])
-
+        if self.return_attn_map and block._get_name() == 'AttentionApproximation' or block._get_name() == 'Attention':
+          h, attn_map = block(h, ys[index], return_attn_map=True)
+        else:
+          h = block(h, ys[index])
     # Apply batchnorm-relu-conv-tanh at output
-    return torch.tanh(self.output_layer(h))
+    out = torch.tanh(self.output_layer(h))
 
+    if self.return_attn_map:
+        return out, attn_map
+    else:
+        return out
 
 # Discriminator architecture, same paradigm as G's above
 def D_arch(ch=64, attention='64',ksize='333333', dilation='111111'):
