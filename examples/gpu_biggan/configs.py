@@ -26,4 +26,5 @@ config = {
     'load_weights': '',
     'lr': 0.01,
     'optimization_steps': 600,
+    'return_attn_map': False
 }
