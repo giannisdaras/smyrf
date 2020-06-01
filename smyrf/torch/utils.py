@@ -287,3 +287,24 @@ class QLSH(LSH):
         right_part = diff <= (self.r / 2)
         truth_table = (left_part * right_part).min(dim=-1)[0].sum(dim=-1)
         return truth_table
+
+
+def color_clusters(q_pos, k_pos, q_cluster_size, k_cluster_size):
+    print('Coloring clusters...')
+    q_pos_sorted = q_pos.argsort(dim=-1).reshape(-1, q_cluster_size)
+    k_pos_sorted = k_pos.argsort(dim=-1).reshape(-1, k_cluster_size)
+
+    n_clusters = q_pos.shape[0] // q_cluster_size
+    # mark each vector with a cluster index
+    for i in range(n_clusters):
+        q_pos[q_pos_sorted[i]] = i + 1
+        k_pos[k_pos_sorted[i]] = i + 1
+
+    # create boolean array where (i, j) says if (i, j) in the same vector
+    bool_arr = (q_pos.unsqueeze(1) == k_pos).type(torch.int32)
+
+    # mark this array with the color of each row
+    for i in range(q_pos.shape[0]):
+        bool_arr[i] *= q_pos[i]
+
+    return bool_arr
