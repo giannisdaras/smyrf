@@ -72,12 +72,21 @@ class Biggan:
         logging.log(logging.INFO, 'Generator and discriminator on eval mode')
 
 
-    def sample(self, generator_inputs, out_path=None):
+    def sample(self, generator_inputs, out_path=None, return_attn_map=False):
         z, y = generator_inputs
-        image_tensors = self.generator(z, self.generator.shared(y))
+
+        if self.config['return_attn_map']:
+            image_tensors, attn_map = self.generator(z, self.generator.shared(y))
+        else:
+            image_tensors = self.generator(z, self.generator.shared(y))
+
         if out_path is not None:
             self.save_images(image_tensors.cpu(), out_path)
-        return image_tensors, y
+
+        if self.config['return_attn_map']:
+            return image_tensors, attn_map, y
+        else:
+            return image_tensors, y
 
 
     def save_images(self, image_tensors, image_path):
