@@ -8,6 +8,8 @@ from categories import indx2category
 import torch
 from tqdm import tqdm, trange
 import numpy as np
+from configs import config
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--weights_root', default='.')
@@ -19,13 +21,7 @@ parser.add_argument('--seed', type=int)
 # Clustering configuration
 parser.add_argument('--n_hashes', type=int, default=4)
 parser.add_argument('--q_cluster_size', type=int, default=32)
-parser.add_argument('--q_attn_size', type=int, default=None)
-parser.add_argument('--clustering_algo', default='lsh')
 
-## Balanced K-means
-parser.add_argument('--max_iters', type=int, default=50)
-parser.add_argument('--progress', default=False, action='store_true',
-                    help='Show progress of kmeans.')
 ## LSH
 parser.add_argument('--r', default=1, type=float)
 
@@ -111,54 +107,18 @@ class Biggan:
 if __name__ == '__main__':
     args = parser.parse_args()
 
-    config = {
-        'model': 'BigGAN',
-        'G_param': 'SN',
-        'D_param': 'SN',
-        'G_ch': 96,
-        'D_ch': 96,
-        'G_depth': 1,
-        'D_depth': 1,
-        'D_wide': True,
-        'G_shared': True,
-        'shared_dim': 128,
-        'dim_z': 120,
-        'z_var': 1.0,
-        'hier': True,
-        'G_nl': 'inplace_relu',
-        'D_nl': 'inplace_relu',
-        'G_attn': '64',
-        'D_attn': '64',
-        'seed': 0,
-        'skip_init': True,
-        'batch_size': 1,
-        'G_fp16': False,
-        'D_fp16': False,
-        'experiment_name': args.experiment_name,
-        'ema': args.ema,
-        'device': 'cuda',
-        'n_classes': 1000,
-        'load_weights': '',
-        'weights_root': args.weights_root,
-        'lr': 0.01,
-        'optimization_steps': 600,
-        # SMYRF configuration
-        'smyrf': not args.disable_smyrf,
-        'clustering_algo': args.clustering_algo,
-        'n_hashes': args.n_hashes,
-        'q_cluster_size': args.q_cluster_size,
-        'k_cluster_size': args.q_cluster_size // 4,
-        'q_attn_size': args.q_attn_size,
-        'k_attn_size': args.q_attn_size // 4 if args.q_attn_size else None,
-        ## K-means
-        'max_iters': args.max_iters,
-        'progress': args.progress,
-        ## LSH
-        'r': args.r,
-        # Metrics configuration
-        'dataset': args.dataset,
-        'num_inception_images': args.num_inception_images,
-    }
+    # parameterize config
+    config['experiment_name'] = args.experiment_name
+    config['ema'] = args.ema
+    config['weights_root'] = args.weights_root
+    config['smyrf'] = not args.disable_smyrf
+    config['n_hashes'] = args.n_hashes
+    config['q_cluster_size'] = args.q_cluster_size
+    config['q_attn_size'] = args.q_cluster_size
+    config['k_cluster_size'] = args.q_cluster_size // 4
+    config['k_attn_size'] = args.q_cluster_size // 4
+    config['dataset'] = args.dataset
+    config['num_inception_images'] = args.num_inception_images
 
     biggan = Biggan(config)
     biggan.load_pretrained()
