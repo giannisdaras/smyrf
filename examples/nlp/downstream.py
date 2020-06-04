@@ -54,7 +54,7 @@ try:
 except ImportError:
     from tensorboardX import SummaryWriter
 
-from configs import BertBaseConfig, AlbertConfig, BertLargeConfig
+from configs import *
 from argparse import ArgumentParser
 
 logger = logging.getLogger(__name__)
