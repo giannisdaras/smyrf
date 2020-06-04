@@ -1110,13 +1110,16 @@ class Distribution(torch.Tensor):
 
 # Convenience function to prepare a z and y vector
 def prepare_z_y(G_batch_size, dim_z, nclasses, device='cuda',
-                fp16=False, z_var=1.0, target=None):
+                fp16=False, z_var=1.0, target=None, range=None):
 
   dtype = torch.float16 if fp16 else torch.float32
   z = torch.empty((G_batch_size, dim_z),
                   device=device,
                   dtype=dtype,
                   requires_grad=False).normal_(0, math.sqrt(z_var))
+  if range is not None:
+      z.clamp_(-range, range)
+
   y = torch.empty(G_batch_size, dtype=torch.int64,
                   requires_grad=False, device=device).random_(nclasses)
   if target is not None:

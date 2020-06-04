@@ -32,7 +32,6 @@ parser.add_argument('--do_metrics', default=False, action='store_true')
 parser.add_argument('--disable_smyrf', action='store_true', default=False)
 parser.add_argument('--do_npz', default=False, action='store_true')
 
-
 # metrics configuration
 parser.add_argument('--dataset', default='I128_hdf5',
                     help='Which HDF5 file to use')
@@ -108,7 +107,8 @@ class Biggan:
             device=self.config["device"],
             fp16=self.config["G_fp16"],
             z_var=self.config["z_var"],
-            target=target
+            target=target,
+            range=self.config["range"],
         )
         return (z_, y_)
 
