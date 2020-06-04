@@ -50,7 +50,7 @@ class BertBaseConfig(BaseConfig):
 
 class RobertaBaseConfig(BaseConfig):
     model_type = 'roberta'
-    model_name_or_path = 'roberta-base-uncased'
+    model_name_or_path = 'roberta-base'
 
 class BertLargeConfig(BaseConfig):
     model_type = 'bert'
