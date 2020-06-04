@@ -428,8 +428,10 @@ class DataProcessingArguments:
 def main():
     configs = {
         'albert': AlbertConfig,
+        'roberta-base': RobertaBaseConfig,
         'bert-base': BertBaseConfig,
-        'bert-large': BertLargeConfig
+        'bert-large': BertLargeConfig,
+        't5-small': T5SmallConfig
     }
     parser = ArgumentParser()
     parser.add_argument('--config', default='bert-base')
