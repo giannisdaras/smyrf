@@ -48,6 +48,14 @@ class BertBaseConfig(BaseConfig):
     model_name_or_path = 'bert-base-uncased'
 
 
+class RobertaBaseConfig(BaseConfig):
+    model_type = 'roberta'
+    model_name_or_path = 'roberta-base-uncased'
+
 class BertLargeConfig(BaseConfig):
     model_type = 'bert'
     model_name_or_path = 'bert-large-uncased'
+
+class T5SmallConfig(BaseConfig):
+    model_type = 't5'
+    model_name_or_path = 't5-small'
