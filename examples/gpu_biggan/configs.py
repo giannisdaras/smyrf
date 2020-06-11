@@ -16,6 +16,7 @@ config = {
     'D_nl': 'inplace_relu',
     'G_attn': '64',
     'D_attn': '64',
+    'resolution': 128,
     'seed': 0,
     'skip_init': True,
     'batch_size': 1,
