@@ -45,11 +45,11 @@ if __name__ == '__main__':
         for batch in tqdm(BATCHES, 'Running batches...'):
             batch_vals = []
             seq_length = args.seq_length // batch
-            queries, keys, values = prepare_input(batch, seq_length, args.q_dim, args.v_dim, device=args.device)
-            lambda_fn = lambda: smyrf(queries, keys, values)
 
             # sampling
             for i in tqdm(range(args.trials), 'Running trials...'):
+                queries, keys, values = prepare_input(batch, seq_length, args.q_dim, args.v_dim, device=args.device)
+                lambda_fn = lambda: smyrf(queries, keys, values)
                 batch_vals.append(measure_time(lambda_fn))
 
             # remove first 5 because are noisy
@@ -62,11 +62,11 @@ if __name__ == '__main__':
     for batch in tqdm(BATCHES, 'Running batches...'):
         batch_vals = []
         seq_length = args.seq_length // batch
-        queries, keys, values = prepare_input(batch, seq_length, args.q_dim, args.v_dim, device=args.device)
-        lambda_fn = lambda: F.softmax(queries @ keys.transpose(-2, -1), dim=-1) @ values
 
         # sampling
         for i in tqdm(range(args.trials), 'Running trials...'):
+            queries, keys, values = prepare_input(batch, seq_length, args.q_dim, args.v_dim, device=args.device)
+            lambda_fn = lambda: F.softmax(queries @ keys.transpose(-2, -1), dim=-1) @ values
             batch_vals.append(measure_time(lambda_fn))
 
         # remove first 5 because are noisy
