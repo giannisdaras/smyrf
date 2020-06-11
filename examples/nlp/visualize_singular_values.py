@@ -1,3 +1,4 @@
+print('Importing... This should not take long...')
 import argparse
 import glob
 import json
@@ -45,6 +46,7 @@ matplotlib.rcParams['mathtext.fontset'] = 'stix'
 matplotlib.rcParams['font.family'] = 'STIXGeneral'
 
 import numpy as np
+print('Finished importing...')
 
 def load_and_cache_examples(args, task, tokenizer, evaluate=False):
     processor = data_utils.ImdbProcessor()
@@ -167,16 +169,15 @@ if __name__ == '__main__':
             outputs = model(**inputs)
 
         attention_maps_per_layer = outputs[2]
-
         fig = plt.figure()
-        fig.suptitle(f'Singular values for 12 heads of 12 BERT attention layers')
+        fig.suptitle(f'Singular values for 12 heads of 12 BERT attention layers. \n Seq. length: {outputs[2][0].shape[2]}')
         plt.xlabel('Index')
         plt.ylabel('Singular value')
 
         step = 1
         for layer_attn_map in attention_maps_per_layer:
             # get only once batch
-            for head_attn_map in layer_attn_map[1]:
+            for head_attn_map in layer_attn_map[0]:
                 print(f'Step {step} out of {144}')
                 u, s, vh = np.linalg.svd(head_attn_map.squeeze().cpu().detach().numpy())
                 plt.plot(np.arange(len(s)), s)
