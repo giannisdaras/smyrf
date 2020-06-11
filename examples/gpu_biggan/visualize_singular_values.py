@@ -23,9 +23,7 @@ parser.add_argument('--device', default='cuda')
 # Good seeds: {200}
 parser.add_argument('--seed', type=int)
 parser.add_argument('--imagenet_category', default=None)
-parser.add_argument('--bs', type=int, default=8)
-# plotting args
-parser.add_argument('--map_size', type=int, default=64)
+parser.add_argument('--bs', type=int, default=6)
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -61,4 +59,5 @@ if __name__ == '__main__':
         u, s, vh = np.linalg.svd(attn_map[i].squeeze().cpu().detach().numpy())
         plt.plot(np.arange(len(s)), s)
 
+    fig.savefig('../../visuals/singular_values.png')
     plt.show()
