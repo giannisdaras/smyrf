@@ -77,8 +77,11 @@ if __name__ == '__main__':
 
     print('\n================= Dense OVER =============================\n')
 
+    fig = plt.figure()
     for identifier in times.keys():
         plt.plot(x_axis[identifier], times[identifier])
 
     plt.legend([x for x in times.keys()])
+    fig.savefig('../visuals/speed.png')
+
     plt.show()
