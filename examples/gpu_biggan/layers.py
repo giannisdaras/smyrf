@@ -165,7 +165,8 @@ class Attention(nn.Module):
     phi = phi.view(-1, self. ch // 8, x.shape[2] * x.shape[3] // 4)
     g = g.view(-1, self. ch // 2, x.shape[2] * x.shape[3] // 4)
     # Matmul and softmax to get attention maps
-    beta = F.softmax(torch.bmm(theta.transpose(1, 2), phi), -1)
+    product = torch.bmm(theta.transpose(1, 2), phi)
+    beta = F.softmax(product, -1)
     # Attention map times g path
     o = self.o(torch.bmm(g, beta.transpose(1,2)).view(-1, self.ch // 2, x.shape[2], x.shape[3]))
 
