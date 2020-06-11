@@ -128,13 +128,14 @@ Results on IMDB dataset. Using dense attention on inference consistently improve
 | SMYRF-BERT    |  50%    | &#x2612;        | 92.64%          |
 | SMYRF-BERT    |  50%    | &#x2611;        | 93.54%          |
 
- 
 
 
 
+### What's here
+The code hosted in this repository is the one we used to run all the experiments in the paper.
+We provide 3 Colab notebooks(anonymized) that can get you started:
+- [Finetuning SMYRF on downstream NLP tasks](https://colab.research.google.com/drive/16_DTy7-jHKHZc9PJ0RVMmLmagzPPm2hP?usp=sharing)
+- [Using SMYRF on a pre-trained BigGAN on ImageNet](https://colab.research.google.com/drive/1D_UYVtPz3yEHkACzztwSZM9NLlZZxNjT?usp=sharing)
+- [Using SMYRF on a pre-trained BigGAN on Celeba-HQ](https://colab.research.google.com/drive/1kJmNXCz-uiEgiHWKFtJ-tlD-TMj345aN?usp=sharing)
 
-
-
-
-
-
+For a deeper dive, look at the `examples/` folder where we have code for pre-training SMYRF-BigGAN, sampling from a pre-trained BigGAN with SMYRF, finetuning state-of-the-art NLP models with SMYRF and a lot more.
