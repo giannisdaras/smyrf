@@ -4,7 +4,7 @@ class BaseConfig:
     cache_dir = None
     task_name = 'imdb'
     data_dir = ''
-    max_seq_length = 128
+    max_seq_length = 512
     overwrite_cache = False
     output_dir = './'
     overwrite_output_dir = True
@@ -33,9 +33,9 @@ class BaseConfig:
     max_steps = -1
     # SMYRF configuration
     smyrf =  True
-    n_hashes = 1
-    k_cluster_size = 64
-    q_cluster_size = 64
+    n_hashes = 8
+    k_cluster_size = 32
+    q_cluster_size = 32
     r = 4
 
 class AlbertConfig(BaseConfig):
