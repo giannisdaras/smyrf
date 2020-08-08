@@ -1,3 +1,4 @@
 torch
-kmeans-pytorch
+sklearn
+tensorboardX
 
