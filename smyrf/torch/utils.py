@@ -142,12 +142,14 @@ class XBOXPLUS(AsymmetricTransform):
         self.MK = torch.max(self.k_norms, dim=1).values.unsqueeze(-1)
 
     def K(self, x):
-        ext = torch.sqrt(self.MQ**2 + self.MK**2 - self.k_norms**2)
+        device = x.device
+        ext = torch.sqrt((self.MQ**2).to(device) + (self.MK**2).to(device) - (self.k_norms**2).to(device))
         zero = torch.tensor(0.0, device=x.device).repeat(x.shape[:-1], 1).unsqueeze(-1)
         return torch.cat((x, ext, zero), -1)
 
     def Q(self, x):
-        ext = torch.sqrt(self.MQ**2 + self.MK**2 - self.q_norms**2)
+        device = x.device
+        ext = torch.sqrt((self.MQ**2).to(device) + (self.MK**2).to(device) - (self.q_norms**2).to(device))
         zero = torch.tensor(0.0, device=x.device).repeat(x.shape[:-1], 1).unsqueeze(-1)
         return torch.cat((x, zero, ext), -1)
 
