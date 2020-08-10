@@ -78,6 +78,8 @@ if _has_sklearn:
             return {"acc": simple_accuracy(preds, labels)}
         elif task_name == "hans":
             return {"acc": simple_accuracy(preds, labels)}
+        elif task_name == "hyperpartisan":
+            return acc_and_f1(preds, labels)
         else:
             raise KeyError(task_name)
 
