@@ -496,9 +496,12 @@ def main():
     args.task_name = args.task_name.lower()
 
     processors['imdb'] = data_utils.ImdbProcessor
-    output_modes['imdb'] = 'classification'
+    processors['hyperpartisan'] = data_utils.HyperpartisanProcessor
     processors['boolq'] = data_utils.BoolQProcessor
+
+    output_modes['imdb'] = 'classification'
     output_modes['boolq'] = 'classification'
+    output_modes['hyperpartisan'] = 'classification'
 
     if args.task_name not in processors:
         raise ValueError("Task not found: %s" % (args.task_name))
