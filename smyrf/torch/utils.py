@@ -227,6 +227,16 @@ class CrossPolytopeLSH(LSH):
         return indices
 
 
+def reformer_lsh(queries, keys, n_hashes):
+    device = queries.device
+    random_rotations = torch.randn([queries.shape[-1], n_hashes] , device=queries.device)
+    rotated_queries = queries @ random_rotations
+    rotated_keys = queries @ random_rotations
+
+
+    rotated_queries = torch.cat([rotated_queries, -rotated_queries] dim=-1)
+    rotated_keys = torch.cat([rotated_keys, -rotated_keys] dim=-1)
+    
 
 def lsh_clustering(queries, keys, n_hashes, r=1, attn_mask=None):
     """
