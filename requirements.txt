@@ -1,4 +1,4 @@
-torch
-sklearn
-tensorboardX
-
+torch==1.6.0
+sklearn==0.0
+tensorboardX==2.1
+forks/transformers
