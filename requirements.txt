@@ -1,5 +1,5 @@
 torch==1.6.0
 sklearn==0.0
 tensorboardX==2.1
-nlp=0.4.0
+nlp==0.4.0
 forks/transformers
