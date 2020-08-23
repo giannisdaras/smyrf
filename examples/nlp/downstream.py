@@ -439,6 +439,22 @@ class DataProcessingArguments:
     )
 
 
+@dataclass
+class SmyrfArguments:
+    n_hashes: int = field(
+        default=2, metadata={"help": "Number of hashes."}
+    )
+    q_cluster_size: int = field(
+        default=32, metadata={"help": "Number of queries per cluster."}
+    )
+    k_cluster_size: int = field(
+        default=32, metadata={"help": "Number of keys per cluster."}
+    )
+    smyrf: bool = field(
+        default=True, metadata={"help": "Whether to use smyrf"}
+    )
+
+
 def main():
     configs = {
         'albert': AlbertConfig,
@@ -447,12 +463,9 @@ def main():
         'bert-large': BertLargeConfig,
         't5-small': T5SmallConfig
     }
-    parser = ArgumentParser()
-    parser.add_argument('--config', default='bert-base')
-    cli_args = parser.parse_args()
+    parser = HfArgumentParser((ModelArguments, DataProcessingArguments, TrainingArguments, SmyrfArguments))
+    args = parser.parse_args()
 
-
-    args = configs[cli_args.config]
     if (
         os.path.exists(args.output_dir)
         and os.listdir(args.output_dir)
@@ -527,7 +540,7 @@ def main():
     config.n_hashes = args.n_hashes
     config.q_cluster_size = args.q_cluster_size
     config.k_cluster_size = args.k_cluster_size
-    config.r = args.r
+    config.r = 4
 
     tokenizer = AutoTokenizer.from_pretrained(
         args.tokenizer_name if args.tokenizer_name else args.model_name_or_path, cache_dir=args.cache_dir,

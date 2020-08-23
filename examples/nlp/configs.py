@@ -1,3 +1,4 @@
+# configs that I usually use for the downstream tasks
 class BaseConfig:
     config_name = None
     tokenizer_name = None
