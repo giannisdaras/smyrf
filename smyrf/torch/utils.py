@@ -227,16 +227,31 @@ class CrossPolytopeLSH(LSH):
         return indices
 
 
-def reformer_lsh(queries, keys, n_hashes):
-    device = queries.device
-    random_rotations = torch.randn([queries.shape[-1], n_hashes] , device=queries.device)
-    rotated_queries = queries @ random_rotations
-    rotated_keys = queries @ random_rotations
+def sort_key_val(t1, t2, dim=-1):
+    values, indices = t1.sort(dim=dim)
+    t2 = t2.expand_as(t1)
+    return values, t2.gather(dim, indices)
 
 
-    rotated_queries = torch.cat([rotated_queries, -rotated_queries] dim=-1)
-    rotated_keys = torch.cat([rotated_keys, -rotated_keys] dim=-1)
-    
+def reformer_lsh(queries, keys, n_hashes, num_clusters, attn_mask=None):
+    # queries: batch x heads, seq, dim
+    # random_rots dim, n_hashes x num_clusters // 2
+    random_rotations = torch.randn([queries.shape[-1], n_hashes * num_clusters // 2], device=queries.device)
+
+    projected_queries = (queries @ random_rotations).reshape(queries.shape[0], queries.shape[1], n_hashes, num_clusters // 2)
+    projected_queries = torch.cat([projected_queries, -projected_queries], dim=-1)
+
+    projected_keys = (keys @ random_rotations).reshape(keys.shape[0], keys.shape[1], n_hashes, num_clusters // 2)
+    projected_keys = torch.cat([projected_keys, -projected_keys], dim=-1)
+
+    if attn_mask is not None:
+        queries_indices = (projected_queries.argmax(dim=-1).permute([2, 0, 1]) - attn_mask).argsort(dim=-1)
+        keys_indices = (projected_keys.argmax(dim=-1).permute([2, 0, 1]) - attn_mask).argsort(dim=-1)
+    else:
+        queries_indices = projected_queries.argmax(dim=-1).permute([2, 0, 1]).argsort(dim=-1)
+        keys_indices = projected_keys.argmax(dim=-1).permute([2, 0, 1]).argsort(dim=-1)
+
+    return queries_indices, keys_indices
 
 def lsh_clustering(queries, keys, n_hashes, r=1, attn_mask=None):
     """
