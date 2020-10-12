@@ -2,6 +2,8 @@
 
 ## SMYRF: Efficient attention using asymmetric clustering
 
+Get started: [![Colab](https://camo.githubusercontent.com/52feade06f2fecbf006889a904d221e6a730c194/68747470733a2f2f636f6c61622e72657365617263682e676f6f676c652e636f6d2f6173736574732f636f6c61622d62616467652e737667)](https://colab.research.google.com/drive/19fIDq7LrRBRz0grM1Frs9Irg3lVh0dXN?usp=sharing)
+
 ### Abstract
 > We propose a novel type of balanced clustering algorithm to approximate attention. Attention complexity is reduced from O(N^2) to O(NlogN), where N is the sequence length. Our algorithm, SMYRF, uses Locality Sensitive Hashing (LSH) in a novel way by defining new Asymmetric transformations and an adaptive scheme that produces balanced clusters. The biggest advantage of SMYRF is that it can be used as a drop-in replacement for dense attention layers *without any retraining*.
 On the contrary, prior fast attention methods impose constraints (e.g. tight queries and keys) and require re-training from scratch. We apply our method to pre-trained state-of-the-art Natural Language Processing and Computer Vision models and we report significant memory and speed benefits. Notably, SMYRF-BERT outperforms (slightly) BERT on GLUE, while using $50\%$ less memory. We also show that SMYRF can be used interchangeably with dense attention before and after training. Finally, we use SMYRF to train GANs with attention in high resolutions. Using a single TPU, we train BigGAN on Celeba-HQ, with attention at resolution 128x128 and 256x256, capable of generating realistic human faces.
@@ -11,18 +13,6 @@ On the contrary, prior fast attention methods impose constraints (e.g. tight que
 #### Memory-quality trade-off
 ![](visuals/quality_degradation.png)
 
-#### Smyrf-BigGAN training on Celeba-HQ-128
-Generated faces by a Smyrf-BigGAN trained on 128x128 resolution with attention at 128x128, using 50% of dense memory.
-![](visuals/smyrf_128res.jpg)
-
-Results after 120k iterations:
-
-|              | Resolution | Attention | # | C    | FID   |
-|--------------|------------|-----------|---|------|-------|
-| BigGAN       | 128x128    | 64x64     | 1 | 4096 | 26.06 |
-| Smyrf-BigGAN | 128x128    | 128x128   | 4 | 2048 | **25.03** |
-
-where \# denotes number of hashes and C number of queries per cluster.
 
 #### GLUE benchmark
 <table>
@@ -129,13 +119,22 @@ Results on IMDB dataset. Using dense attention on inference consistently improve
 | SMYRF-BERT    |  50%    | &#x2611;        | 93.54%          |
 
 
+#### Smyrf-BigGAN training on Celeba-HQ-128
+Generated faces by a Smyrf-BigGAN trained on 128x128 resolution with attention at 128x128, using 50% of dense memory.
+![](visuals/smyrf_128res.jpg)
+
+Results after 120k iterations:
+
+|              | Resolution | Attention | # | C    | FID   |
+|--------------|------------|-----------|---|------|-------|
+| BigGAN       | 128x128    | 64x64     | 1 | 4096 | 26.06 |
+| Smyrf-BigGAN | 128x128    | 128x128   | 4 | 2048 | **25.03** |
+
+where \# denotes number of hashes and C number of queries per cluster.
 
 
 ### What's here
 The code hosted in this repository is the one we used to run all the experiments in the paper.
-We provide 3 Colab notebooks(anonymized) that can get you started:
-- [Finetuning SMYRF on downstream NLP tasks](https://colab.research.google.com/drive/16_DTy7-jHKHZc9PJ0RVMmLmagzPPm2hP?usp=sharing)
-- [Using SMYRF on a pre-trained BigGAN on ImageNet](https://colab.research.google.com/drive/1D_UYVtPz3yEHkACzztwSZM9NLlZZxNjT?usp=sharing)
-- [Using SMYRF on a pre-trained BigGAN on Celeba-HQ](https://colab.research.google.com/drive/1kJmNXCz-uiEgiHWKFtJ-tlD-TMj345aN?usp=sharing)
+Get started: [![Colab](https://camo.githubusercontent.com/52feade06f2fecbf006889a904d221e6a730c194/68747470733a2f2f636f6c61622e72657365617263682e676f6f676c652e636f6d2f6173736574732f636f6c61622d62616467652e737667)](https://colab.research.google.com/drive/19fIDq7LrRBRz0grM1Frs9Irg3lVh0dXN?usp=sharing)
 
 For a deeper dive, look at the `examples/` folder where we have code for pre-training SMYRF-BigGAN, sampling from a pre-trained BigGAN with SMYRF, finetuning state-of-the-art NLP models with SMYRF and a lot more.
