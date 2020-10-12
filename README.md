@@ -2,7 +2,9 @@
 
 ## SMYRF: Efficient attention using asymmetric clustering
 
-Get started: [![Colab](https://camo.githubusercontent.com/52feade06f2fecbf006889a904d221e6a730c194/68747470733a2f2f636f6c61622e72657365617263682e676f6f676c652e636f6d2f6173736574732f636f6c61622d62616467652e737667)](https://colab.research.google.com/drive/19fIDq7LrRBRz0grM1Frs9Irg3lVh0dXN?usp=sharing)
+Get started: 
+
+[![Colab](https://camo.githubusercontent.com/52feade06f2fecbf006889a904d221e6a730c194/68747470733a2f2f636f6c61622e72657365617263682e676f6f676c652e636f6d2f6173736574732f636f6c61622d62616467652e737667)](https://colab.research.google.com/drive/19fIDq7LrRBRz0grM1Frs9Irg3lVh0dXN?usp=sharing)
 
 ### Abstract
 > We propose a novel type of balanced clustering algorithm to approximate attention. Attention complexity is reduced from O(N^2) to O(NlogN), where N is the sequence length. Our algorithm, SMYRF, uses Locality Sensitive Hashing (LSH) in a novel way by defining new Asymmetric transformations and an adaptive scheme that produces balanced clusters. The biggest advantage of SMYRF is that it can be used as a drop-in replacement for dense attention layers *without any retraining*.
@@ -135,6 +137,18 @@ where \# denotes number of hashes and C number of queries per cluster.
 
 ### What's here
 The code hosted in this repository is the one we used to run all the experiments in the paper.
-Get started: [![Colab](https://camo.githubusercontent.com/52feade06f2fecbf006889a904d221e6a730c194/68747470733a2f2f636f6c61622e72657365617263682e676f6f676c652e636f6d2f6173736574732f636f6c61622d62616467652e737667)](https://colab.research.google.com/drive/19fIDq7LrRBRz0grM1Frs9Irg3lVh0dXN?usp=sharing)
+Get started: 
+
+[![Colab](https://camo.githubusercontent.com/52feade06f2fecbf006889a904d221e6a730c194/68747470733a2f2f636f6c61622e72657365617263682e676f6f676c652e636f6d2f6173736574732f636f6c61622d62616467652e737667)](https://colab.research.google.com/drive/19fIDq7LrRBRz0grM1Frs9Irg3lVh0dXN?usp=sharing)
 
 For a deeper dive, look at the `examples/` folder where we have code for pre-training SMYRF-BigGAN, sampling from a pre-trained BigGAN with SMYRF, finetuning state-of-the-art NLP models with SMYRF and a lot more.
+
+### Acknowledgments
+
+We would like to wholeheartedly thank the TensorFlow Research Cloud (TFRC) program that gave us access to Cloud TPUs and GCP credits to train our models.
+
+The code for the NLP experiments is exclusively based on the HuggingFace `transformers` [library](https://github.com/huggingface/transformers).
+We are very grateful to the authors of the library for their work.
+
+The code for the CV experiments is based on the PyTorch implementation of BigGAN available in this [url](https://github.com/ajbrock/BigGAN-PyTorch).
+The code has been expanded to support training on TPUs. Again, we want to thank the author for open-sourcing this implementation.
